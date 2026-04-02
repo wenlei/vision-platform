@@ -1,0 +1,14 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+ultralytics==8.3.0
+git+https://github.com/openai/CLIP.git
+insightface==0.7.3
+onnxruntime-gpu==1.19.2
+psycopg2-binary==2.9.9
+pgvector==0.3.2
+Pillow==10.4.0
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+python-dotenv==1.0.1
+httpx==0.27.2
