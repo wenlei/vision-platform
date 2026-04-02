@@ -1,9 +1,3 @@
-# vision-inference : GPU ??  docker-compose
-# ???? : Alchemy_Furnace (192.168.50.71)
-# ???   : ?? PostgreSQL LXC (192.168.50.118:5432)
-# GPU      : RTX 4090??? nvidia runtime ??
-# ???? : docker compose -f docker-compose.gpu.yml up -d
-
 services:
   vision-inference:
     build:
@@ -12,7 +6,6 @@ services:
     image: vision-inference:gpu
     container_name: vision-inference-gpu
     restart: unless-stopped
-
     deploy:
       resources:
         reservations:
@@ -20,10 +13,8 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-
     ports:
-      - "8000:8000"
-
+      - 8000:8000
     environment:
       DEVICE: gpu
       DB_HOST: 192.168.50.118
@@ -34,22 +25,20 @@ services:
       IMAGE_STORAGE: retention
       IMAGE_RETENTION_HOURS: 48
       NAS_PATH: /app/images
-
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [CMD, curl, -f, http://localhost:8000/health]
       interval: 30s
       timeout: 10s
       start_period: 90s
       retries: 3
-
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "50m"
-        max-file: "3"
-
+        max-size: 50m
+        max-file: '3'
     volumes:
       - vision_images:/app/images
+      - ./static:/app/static
 
 volumes:
   vision_images:
