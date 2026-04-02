@@ -1,0 +1,104 @@
+# =============================================================
+# app-runtime.yaml -- vision-inference 应用运行时配置
+#
+# 职责：应用业务逻辑配置（数据库、存储、推理参数等）
+# 容器配置见：docker/docker-compose.gpu.yml
+#
+# 敏感字段（如密码）使用 ${VAR} 占位符，
+# 实际值在 .env 文件中定义（.env 不进 Git）。
+#
+# 生效方式：修改后重启容器即可，无需重建镜像。
+#   docker compose -f docker/docker-compose.gpu.yml restart
+# =============================================================
+
+
+# -- 运行模式 --------------------------------------------------
+# 决定加载哪套模型和推理后端
+#   gpu : YOLO11L + CLIP CUDA + InsightFace buffalo_l（高精度）
+#   cpu : YOLO11N + CLIP CPU  + InsightFace buffalo_s（低功耗）
+device: gpu
+
+
+# -- 数据库 ----------------------------------------------------
+# 外部 PostgreSQL LXC，GPU/CPU 路线共用同一个 vision_db。
+# CPU 路线使用内嵌 PostgreSQL 时，host 填 localhost。
+# 密码通过 .env 文件注入，不在此处明文填写。
+database:
+  host: 192.168.50.118       # PostgreSQL 服务地址
+  port: 5432                 # 默认端口
+  user: wenlei               # 数据库用户名
+  password: ${DB_PASS}       # 实际值在 .env 中定义：DB_PASS=xxx
+  name: vision_db            # 数据库名称
+
+
+# -- 图片存储 --------------------------------------------------
+# 控制推理后图片的落盘策略。
+#
+# mode 选项：
+#   none      : 不保存图片。只做推理和入库，不产生图片文件。
+#               适合存储有限或不需要回溯图片的场景。
+#   retention : 保存图片到 path，由 cleanup 定时清理过期图片。
+#               适合需要短期回溯的场景。
+#   permanent : 保存图片到 path，永久保留，不做清理。
+#               适合挂载外部存储（NAS、本地磁盘）的长期归档场景。
+#
+# path 说明：
+#   可以是容器内本地路径（如 /app/images），
+#   也可以是通过 docker volume 挂载进来的任意外部路径。
+#   mode=none 时此字段被忽略。
+storage:
+  mode: retention
+  path: /app/images          # 图片存储路径，可挂载任意外部目录
+  retention_hours: 72        # mode=retention 时生效：超期图片被清理（小时）
+
+  # cleanup 调度：仅在 mode=retention 时有效
+  # schedule 选项：
+  #   interval : 每隔固定小时数执行一次清理
+  #   daily    : 每天在指定时间执行一次清理
+  cleanup:
+    schedule: interval       # interval | daily
+    interval_hours: 6        # schedule=interval 时生效
+    daily_time: "03:00"      # schedule=daily 时生效（HH:MM 24小时制）
+
+
+# -- 人脸识别阈值 ----------------------------------------------
+# 控制 /face/identify 的匹配行为（余弦相似度 0~1）：
+#
+#   >= threshold_high         : 高置信匹配，直接返回结果
+#   >= threshold_low
+#     && < threshold_high     : 低置信匹配，返回结果并自动学习
+#                               （将该帧 embedding 滚动平均到已知人脸）
+#   < threshold_low           : 识别为 unknown，不触发任何操作
+face:
+  threshold_high: 0.75       # 高置信下限，建议范围 0.70~0.85
+  threshold_low: 0.40        # 最低识别阈值，建议范围 0.35~0.50
+
+
+# -- 摄像头默认方向 --------------------------------------------
+# 容器侧记录的全局默认值，支持多摄像头时作为 fallback。
+# 实际方向由设备抽象层通过 MAC 查询 devices 表来管理。
+#
+# 固件层（vflip/hmirror）：写入传感器寄存器，重启后持久生效。
+# 客户端层（css_rotate）：仅影响 UI 显示，不改变图像数据。
+camera:
+  default_vflip: 0           # 0=正常 | 1=上下翻转
+  default_hmirror: 0         # 0=正常 | 1=水平镜像
+  default_css_rotate: 0      # UI 显示旋转角度：0 / 90 / 180 / 270
+
+
+# -- 日志 ------------------------------------------------------
+# level 选项：DEBUG | INFO | WARNING | ERROR
+#   DEBUG : 输出每次推理的详细耗时，适合开发调试
+#   INFO  : 生产环境推荐级别
+logging:
+  level: INFO
+  format: "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+
+# -- 服务器 ----------------------------------------------------
+# workers : uvicorn 工作进程数。
+#           模型在进程级别加载，多 worker 会导致显存/内存重复占用。
+#           GPU 路线必须为 1。
+#           CPU 路线视可用内存而定，建议 1~2。
+server:
+  workers: 1

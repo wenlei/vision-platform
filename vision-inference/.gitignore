@@ -3,3 +3,4 @@ __pycache__/
 *.pt
 images/
 .env
+!.env.example  # 模板文件进 Git
