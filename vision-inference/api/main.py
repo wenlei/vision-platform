@@ -45,7 +45,7 @@ app.include_router(search_router)
 
 # ── 静态文件服务（Web UI）────────────────────────────────────
 _BASE = Path(__file__).parent.parent
-UI_DIR = _BASE / "UI" if (_BASE / "UI").exists() else _BASE / "static"
+UI_DIR = _BASE / "UI"
 if UI_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(UI_DIR)), name="static")
     log.info("Static files mounted at /static from %s", UI_DIR)

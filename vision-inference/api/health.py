@@ -18,9 +18,9 @@ from api.config import cfg, storage_mode, image_dir, face_thresholds, log_level
 log = logging.getLogger(__name__)
 router = APIRouter()
 
-# UI 目录：优先 UI/，兼容旧版 static/
+# UI 目录
 _BASE = Path(__file__).parent.parent
-UI_DIR = _BASE / "UI" if (_BASE / "UI").exists() else _BASE / "static"
+UI_DIR = _BASE / "UI"
 
 
 @router.get("/")
@@ -31,7 +31,7 @@ def index():
         return FileResponse(str(ui))
     return JSONResponse({
         "status": "ok",
-        "ui": "not found, place UI/index.html or static/index.html",
+        "ui": "not found, place UI/index.html",
     })
 
 

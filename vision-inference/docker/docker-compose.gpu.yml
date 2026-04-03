@@ -40,7 +40,7 @@ services:
         max-file: '3'
     volumes:
       - vision_images:/app/images
-      - ../static:/app/static
+      - ../UI:/app/UI
 
 volumes:
   vision_images:

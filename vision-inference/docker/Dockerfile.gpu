@@ -19,7 +19,7 @@ RUN python3 -c "from ultralytics import YOLO; YOLO('yolo11l.pt'); print('YOLO11L
 COPY api/ ./api/
 COPY app-runtime.yaml .
 COPY .env* ./
-COPY static/ ./static/
+COPY UI/ ./UI/
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
