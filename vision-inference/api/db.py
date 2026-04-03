@@ -22,6 +22,7 @@ import psycopg2
 from psycopg2.extras import Json
 
 from api.config import db_config
+from api.device_layer import resolve_device
 
 log = logging.getLogger(__name__)
 
@@ -60,41 +61,20 @@ def get_raw_conn():
     return psycopg2.connect(**db_config())
 
 
-def lookup_device(cur, mac):
-    """
-    通过 MAC 地址查询设备名称和位置。
-
-    Args:
-        cur: 数据库游标
-        mac: MAC 地址字符串（如 "E8:F6:0A:8C:F4:44"）
-
-    Returns:
-        (device_name, location) 元组，未找到返回 (None, None)
-    """
-    if not mac:
-        return None, None
-    cur.execute(
-        "SELECT name, location FROM devices WHERE mac = %s",
-        (mac.upper(),)
-    )
-    row = cur.fetchone()
-    return (row[0], row[1]) if row else (None, None)
-
-
 def save_to_db(camera_ip, labels, description, image_path,
                confidence_data, raw_result, device_mac=None):
     """
     将检测结果写入 vision_log 表。
 
-    同时通过 MAC 查询设备名称和位置，一并写入记录。
-    image_url 字段存储文件路径（非 base64）。
+    通过 device_layer.resolve_device() 将 MAC 映射为设备语义信息，
+    一并写入记录。image_url 字段存储文件路径（非 base64）。
 
     Returns:
         (device_name, location) 元组，写入失败返回 (None, None)
     """
     try:
         with get_conn() as (conn, cur):
-            device_name, location = lookup_device(cur, device_mac)
+            device_info = resolve_device(cur, device_mac)
             cur.execute(
                 """INSERT INTO vision_log
                    (camera_ip, labels, description, image_url,
@@ -102,9 +82,9 @@ def save_to_db(camera_ip, labels, description, image_path,
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (camera_ip, labels, description, image_path,
                  Json(confidence_data), Json(raw_result),
-                 device_mac, device_name)
+                 device_mac, device_info["name"])
             )
-            return device_name, location
+            return device_info["name"], device_info["location"]
     except Exception as e:
         log.error("DB save error: %s", e)
         return None, None
