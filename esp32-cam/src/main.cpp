@@ -2,10 +2,13 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include "esp_camera.h"
+#include "esp_task_wdt.h"
 
+// ── WiFi 配置 ──────────────────────────────────────���───────
 const char* ssid     = "701";
 const char* password = "11040109";
 
+// ── 摄像头引脚（XIAO ESP32-S3 Sense）─────────────────────
 #define PWDN_GPIO_NUM  -1
 #define RESET_GPIO_NUM -1
 #define XCLK_GPIO_NUM  10
@@ -23,9 +26,58 @@ const char* password = "11040109";
 #define HREF_GPIO_NUM  47
 #define PCLK_GPIO_NUM  13
 
+// ── 环形日志缓冲区 ────────────────────────────────────────
+#define LOG_SIZE 50
+#define LOG_MSG_LEN 96
+
+struct LogEntry {
+    unsigned long ts;   // millis()
+    char msg[LOG_MSG_LEN];
+};
+
+LogEntry logBuf[LOG_SIZE];
+int logHead = 0;        // 下一条写入位置
+int logCount = 0;       // 当前日志总数
+
+void addLog(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    LogEntry& e = logBuf[logHead];
+    e.ts = millis();
+    vsnprintf(e.msg, LOG_MSG_LEN, fmt, args);
+    va_end(args);
+    Serial.printf("[%lu] %s\n", e.ts, e.msg);
+    logHead = (logHead + 1) % LOG_SIZE;
+    if (logCount < LOG_SIZE) logCount++;
+}
+
+// ── 全局状态 ──────────────────────────────────────────────
 WebServer server(80);
 WiFiServer streamServer(81);
 
+int wifiReconnects = 0;
+unsigned long lastWifiCheck = 0;
+unsigned long lastStatusLog = 0;
+unsigned long reconnectDelay = 1000;   // 递增重连间隔
+bool wifiWasConnected = false;
+
+// ── 启动原因 ──────────────────────────────────────────────
+const char* getResetReason() {
+    esp_reset_reason_t r = esp_reset_reason();
+    switch (r) {
+        case ESP_RST_POWERON:  return "power_on";
+        case ESP_RST_SW:       return "software";
+        case ESP_RST_PANIC:    return "crash_panic";
+        case ESP_RST_INT_WDT:  return "int_watchdog";
+        case ESP_RST_TASK_WDT: return "task_watchdog";
+        case ESP_RST_WDT:      return "watchdog";
+        case ESP_RST_DEEPSLEEP: return "deep_sleep";
+        case ESP_RST_BROWNOUT: return "brownout";
+        default:               return "unknown";
+    }
+}
+
+// ── 摄像头初始化 ──────────────────────────────────────────
 bool initCamera() {
     camera_config_t config;
     config.ledc_channel = LEDC_CHANNEL_0;
@@ -56,66 +108,91 @@ bool initCamera() {
 
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
-        Serial.printf("Camera init failed: 0x%x", err);
+        addLog("Camera init failed: 0x%x", err);
         return false;
     }
-    Serial.println("Camera ready - VGA 640x480");
+    addLog("Camera ready VGA 640x480");
     return true;
 }
 
-// ── /status ────────────────────────────────────────────────
+// ── /status（含诊断字段）──────────────────────────────────
 void handleStatus() {
     sensor_t* s = esp_camera_sensor_get();
     int vf = 0, hm = 0;
     if (s) { vf = s->status.vflip; hm = s->status.hmirror; }
 
     String json = "{\"status\":\"ok\","
-                  "\"device\":\"XIAO ESP32-S3\","
-                  "\"device_name\":\"desk-cam-01\","
-                  "\"location\":\"study-desk\","
-                  "\"resolution\":\"640x480\","
-                  "\"vflip\":" + String(vf) + ","
-                  "\"hmirror\":" + String(hm) + ","
-                  "\"ip\":\"" + WiFi.localIP().toString() + "\","
-                  "\"mac\":\"" + WiFi.macAddress() + "\"}";
+        "\"device\":\"XIAO ESP32-S3\","
+        "\"device_name\":\"desk-cam-01\","
+        "\"location\":\"study-desk\","
+        "\"resolution\":\"640x480\","
+        "\"vflip\":" + String(vf) + ","
+        "\"hmirror\":" + String(hm) + ","
+        "\"ip\":\"" + WiFi.localIP().toString() + "\","
+        "\"mac\":\"" + WiFi.macAddress() + "\","
+        "\"rssi\":" + String(WiFi.RSSI()) + ","
+        "\"uptime_sec\":" + String(millis() / 1000) + ","
+        "\"free_heap\":" + String(ESP.getFreeHeap()) + ","
+        "\"wifi_reconnects\":" + String(wifiReconnects) + ","
+        "\"boot_reason\":\"" + String(getResetReason()) + "\"}";
     server.sendHeader("Access-Control-Allow-Origin", "*");
     server.send(200, "application/json", json);
 }
 
-// ── /config?vflip=0|1&hmirror=0|1 ─────────────────────────
+// ── /logs ─────────────────────────────────────────────────
+void handleLogs() {
+    bool clearAfter = server.hasArg("clear") && server.arg("clear") == "1";
+
+    String json = "[";
+    int start = (logCount < LOG_SIZE) ? 0 : logHead;
+    for (int i = 0; i < logCount; i++) {
+        int idx = (start + i) % LOG_SIZE;
+        if (i > 0) json += ",";
+        // 转义 msg 中的双引号
+        String escaped = logBuf[idx].msg;
+        escaped.replace("\"", "\\\"");
+        json += "{\"t\":" + String(logBuf[idx].ts) + ",\"msg\":\"" + escaped + "\"}";
+    }
+    json += "]";
+
+    server.sendHeader("Access-Control-Allow-Origin", "*");
+    server.send(200, "application/json", json);
+
+    if (clearAfter) {
+        logHead = 0;
+        logCount = 0;
+    }
+}
+
+// ── /config?vflip=0|1&hmirror=0|1 ────────────────────────
 void handleConfig() {
     sensor_t* s = esp_camera_sensor_get();
     if (!s) {
         server.send(500, "application/json", "{\"error\":\"sensor not ready\"}");
         return;
     }
-
-    String changed = "";
-
     if (server.hasArg("vflip")) {
         int v = server.arg("vflip").toInt();
         s->set_vflip(s, v);
-        changed += "vflip=" + String(v) + " ";
+        addLog("Config vflip=%d", v);
     }
     if (server.hasArg("hmirror")) {
         int h = server.arg("hmirror").toInt();
         s->set_hmirror(s, h);
-        changed += "hmirror=" + String(h) + " ";
+        addLog("Config hmirror=%d", h);
     }
-
-    Serial.println("Config updated: " + changed);
-
     String json = "{\"status\":\"ok\","
-                  "\"vflip\":" + String(s->status.vflip) + ","
-                  "\"hmirror\":" + String(s->status.hmirror) + "}";
+        "\"vflip\":" + String(s->status.vflip) + ","
+        "\"hmirror\":" + String(s->status.hmirror) + "}";
     server.sendHeader("Access-Control-Allow-Origin", "*");
     server.send(200, "application/json", json);
 }
 
-// ── /capture ───────────────────────────────────────────────
+// ── /capture ──────────────────────────────────────────────
 void handleCapture() {
     camera_fb_t* fb = esp_camera_fb_get();
     if (!fb) {
+        addLog("Capture failed");
         server.send(500, "application/json", "{\"error\":\"capture failed\"}");
         return;
     }
@@ -126,21 +203,20 @@ void handleCapture() {
     server.sendHeader("Content-Disposition", "inline; filename=capture.jpg");
     server.send_P(200, "image/jpeg", (const char*)fb->buf, fb->len);
     esp_camera_fb_return(fb);
-    Serial.println("Captured VGA frame");
 }
 
-// ── MJPEG stream :81 ───────────────────────────────────────
+// ── MJPEG stream :81 ─────────────────────────────────────
 void handleStreamClient(WiFiClient client) {
-    Serial.println("Stream client connected");
+    addLog("Stream client connected");
     client.print("HTTP/1.1 200 OK\r\n");
     client.print("Content-Type: multipart/x-mixed-replace; boundary=frame\r\n");
     client.print("Access-Control-Allow-Origin: *\r\n");
     client.print("Connection: keep-alive\r\n\r\n");
 
     while (client.connected()) {
+        esp_task_wdt_reset();  // 喂狗，避免流阻塞触发看门狗
         camera_fb_t* fb = esp_camera_fb_get();
-        if (!fb) { Serial.println("Stream: capture failed"); break; }
-
+        if (!fb) { addLog("Stream capture failed"); break; }
         client.print("--frame\r\n");
         client.print("Content-Type: image/jpeg\r\n");
         client.print("Content-Length: " + String(fb->len) + "\r\n\r\n");
@@ -150,46 +226,103 @@ void handleStreamClient(WiFiClient client) {
         delay(50);
     }
     client.stop();
-    Serial.println("Stream client disconnected");
+    addLog("Stream client disconnected");
 }
 
-// ── setup / loop ───────────────────────────────────────────
+// ── WiFi 自动重连 ────────────────────────────────────────
+void checkWifi() {
+    unsigned long now = millis();
+    if (now - lastWifiCheck < 1000) return;  // 每秒检查一次
+    lastWifiCheck = now;
+
+    if (WiFi.status() == WL_CONNECTED) {
+        if (!wifiWasConnected) {
+            addLog("WiFi connected IP=%s RSSI=%d", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+            wifiWasConnected = true;
+            reconnectDelay = 1000;  // 重置重连间隔
+        }
+        return;
+    }
+
+    // WiFi 断开
+    if (wifiWasConnected) {
+        addLog("WiFi disconnected after %lu sec", now / 1000);
+        wifiWasConnected = false;
+    }
+
+    // 递增重连
+    static unsigned long lastReconnectAttempt = 0;
+    if (now - lastReconnectAttempt >= reconnectDelay) {
+        lastReconnectAttempt = now;
+        wifiReconnects++;
+        addLog("WiFi reconnect #%d (delay=%lums)", wifiReconnects, reconnectDelay);
+        WiFi.disconnect();
+        WiFi.begin(ssid, password);
+        if (reconnectDelay < 30000) reconnectDelay *= 2;  // 最大 30 秒
+    }
+}
+
+// ── 定期状态日志（每 60 秒）──────────────────────────────
+void periodicStatusLog() {
+    unsigned long now = millis();
+    if (now - lastStatusLog < 60000) return;
+    lastStatusLog = now;
+    addLog("RSSI=%d heap=%u uptime=%lus", WiFi.RSSI(), ESP.getFreeHeap(), now / 1000);
+}
+
+// ── setup ────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    Serial.println("Connecting WiFi...");
+    addLog("Boot reason: %s", getResetReason());
+    addLog("Connecting WiFi SSID=%s", ssid);
+
     WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500); Serial.print(".");
+    unsigned long wifiStart = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 15000) {
+        delay(500);
+        Serial.print(".");
     }
-    Serial.println("");
-    Serial.print("IP: ");    Serial.println(WiFi.localIP());
-    Serial.print("MAC: ");   Serial.println(WiFi.macAddress());
+    Serial.println();
+
+    if (WiFi.status() == WL_CONNECTED) {
+        wifiWasConnected = true;
+        addLog("WiFi connected IP=%s RSSI=%d", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+    } else {
+        addLog("WiFi initial connect timeout, will retry in loop");
+    }
 
     if (!initCamera()) {
-        Serial.println("Camera init failed - halting");
-        while(true) delay(1000);
+        addLog("Camera init failed - halting");
+        while (true) delay(1000);
     }
 
     server.on("/status",  handleStatus);
     server.on("/capture", handleCapture);
     server.on("/config",  handleConfig);
+    server.on("/logs",    handleLogs);
     server.begin();
     streamServer.begin();
 
-    Serial.println("Endpoints:");
-    Serial.println("  :80/status          - device info + current orientation");
-    Serial.println("  :80/capture         - single JPEG");
-    Serial.println("  :80/config?vflip=1  - set vflip (0/1)");
-    Serial.println("  :80/config?hmirror=1- set hmirror (0/1)");
-    Serial.println("  :81/               - MJPEG stream");
+    // 启用看门狗（8 秒超时）
+    esp_task_wdt_init(8, true);
+    esp_task_wdt_add(NULL);
+
+    addLog("Ready: :80/status,capture,config,logs :81/stream");
 }
 
+// ── loop ─────────────────────────────────────────────────
 void loop() {
-    server.handleClient();
-    WiFiClient streamClient = streamServer.available();
-    if (streamClient) {
-        handleStreamClient(streamClient);
+    esp_task_wdt_reset();
+    checkWifi();
+    periodicStatusLog();
+
+    if (WiFi.status() == WL_CONNECTED) {
+        server.handleClient();
+        WiFiClient streamClient = streamServer.available();
+        if (streamClient) {
+            handleStreamClient(streamClient);
+        }
     }
 }

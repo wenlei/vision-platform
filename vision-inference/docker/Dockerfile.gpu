@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────
+# vision-inference : GPU 路线
+# 基础镜像 : pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+# 模型     : YOLO11L + CLIP ViT-B/32 + InsightFace buffalo_l
+# 数据库   : 外部 PostgreSQL（DB_HOST 环境变量）
+# 硬件需求 : NVIDIA GPU >= 8GB VRAM，16GB RAM
+# ─────────────────────────────────────────────────────────────
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 libgl1-mesa-glx libgomp1 libpq-dev curl git cmake build-essential && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY docker/requirements.gpu.txt .
+RUN pip install --no-cache-dir -r requirements.gpu.txt
+
+RUN python3 -c "import clip; clip.load('ViT-B/32', device='cpu'); print('CLIP downloaded')"
+RUN python3 -c "from ultralytics import YOLO; YOLO('yolo11l.pt'); print('YOLO11L downloaded')"
+
+COPY api/ ./api/
+COPY app-runtime.yaml .
+COPY .env* ./
+COPY static/ ./static/
+
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+CMD ["python3", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

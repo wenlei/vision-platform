@@ -1,13 +1,13 @@
 """
-config.py -- ??????
+config.py -- 应用运行时配置加载
 
-???
-  1. ?? .env ??????????????
-  2. ?? app-runtime.yaml
-  3. ?? yaml ?? ${VAR} ???
-  4. ???????? cfg??????????
+加载流程：
+  1. 读取 .env 文件，将变量注入到环境变量中
+  2. 读取 app-runtime.yaml
+  3. 将 yaml 中的 ${VAR} 占位符替换为实际环境变量值
+  4. 导出全局字典 cfg，供各模块直接引用
 
-?????
+使用方式：
   from api.config import cfg, get, db_config
   host = cfg["database"]["host"]
 """
@@ -17,14 +17,14 @@ import re
 import yaml
 from pathlib import Path
 
-# ??????vision-inference/?
+# 项目根目录：vision-inference/
 BASE_DIR = Path(__file__).parent.parent
 
 
 def _load_env(env_path):
     """
-    ?? .env ????????? os.environ?
-    ??????????????docker compose environment ???????
+    读取 .env 文件，将键值对注入 os.environ。
+    仅补充缺失的变量（docker compose environment 已设置的不覆盖）。
     """
     if not env_path.exists():
         return
@@ -44,15 +44,15 @@ def _load_env(env_path):
 
 def _expand_vars(obj):
     """
-    ???????? ${VAR} ????
-    ????????????????????
+    递归遍历配置树，将 ${VAR} 占位符替换为环境变量值。
+    未定义的变量保留原始占位符并打印警告。
     """
     if isinstance(obj, str):
         def replacer(match):
             var_name = match.group(1)
             val = os.environ.get(var_name)
             if val is None:
-                print(f'[config] WARNING: ${{var_name}} not set in environment')
+                print(f'[config] WARNING: ${{{var_name}}} not set in environment')
                 return match.group(0)
             return val
         return re.sub(r'\$\{([^}]+)\}', replacer, obj)
@@ -65,10 +65,10 @@ def _expand_vars(obj):
 
 def _load_config():
     """
-    ?????????
-      1. ?? .env??????????? docker compose environment ???
-      2. ?? app-runtime.yaml
-      3. ?? ${VAR} ???
+    主加载流程：
+      1. 读取 .env（补充环境变量，不覆盖 docker compose environment 已有值）
+      2. 读取 app-runtime.yaml
+      3. 展开 ${VAR} 占位符
     """
     _load_env(BASE_DIR / '.env')
     runtime_path = BASE_DIR / 'app-runtime.yaml'
@@ -82,19 +82,20 @@ def _load_config():
     return result
 
 
-# ??????????import ??????
+# 模块级单例：首次 import 时自动加载配置
 cfg = _load_config()
 
 
-# ?? ?????? ??????????????????????????????????????????????
+# ── 便捷访问函数 ─────────────────────────────────────────────
+# 以下函数封装常用配置段，避免各业务模块重复解析字典结构。
 
 def get(section, key, default=None):
-    """??????????get('database', 'host') ? '192.168.50.118'"""
+    """二级键值读取。get('database', 'host') → '192.168.50.118'"""
     return cfg.get(section, {}).get(key, default)
 
 
 def db_config():
-    """?? psycopg2.connect() ??????????"""
+    """返回 psycopg2.connect() 可直接展开的参数字典。"""
     db = cfg.get('database', {})
     return {
         'host':            db.get('host',     'localhost'),
@@ -107,12 +108,12 @@ def db_config():
 
 
 def storage_mode():
-    """?????????none | retention | permanent"""
+    """返回图片存储模式：none | retention | permanent"""
     return cfg.get('storage', {}).get('mode', 'retention')
 
 
 def image_dir():
-    """????????? Path ??????????"""
+    """返回图片存储目录 Path 对象，目录不存在时自动创建。"""
     path = cfg.get('storage', {}).get('path', '/app/images')
     p = Path(path)
     if storage_mode() != 'none':
@@ -121,7 +122,7 @@ def image_dir():
 
 
 def face_thresholds():
-    """???????? (threshold_high, threshold_low)?"""
+    """返回人脸识别阈值 (threshold_high, threshold_low)。"""
     face = cfg.get('face', {})
     return (
         float(face.get('threshold_high', 0.75)),
@@ -130,7 +131,7 @@ def face_thresholds():
 
 
 def camera_defaults():
-    """??????????????"""
+    """返回摄像头全局默认方向配置。"""
     return cfg.get('camera', {
         'default_vflip':      0,
         'default_hmirror':    0,
@@ -139,7 +140,7 @@ def camera_defaults():
 
 
 def cleanup_config():
-    """?? cleanup ???????"""
+    """返回 cleanup 调度配置字典。"""
     return cfg.get('storage', {}).get('cleanup', {
         'schedule':       'interval',
         'interval_hours': 6,
@@ -148,12 +149,12 @@ def cleanup_config():
 
 
 def log_level():
-    """??????????? INFO / DEBUG"""
+    """返回日志级别字符串：INFO / DEBUG"""
     return cfg.get('logging', {}).get('level', 'INFO')
 
 
 def log_format():
-    """?????????"""
+    """返回日志格式字符串。"""
     return cfg.get('logging', {}).get(
         'format', '%(asctime)s %(levelname)s %(name)s %(message)s'
     )

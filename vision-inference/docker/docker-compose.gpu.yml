@@ -1,8 +1,8 @@
 services:
   vision-inference:
     build:
-      context: .
-      dockerfile: Dockerfile.gpu
+      context: ..
+      dockerfile: docker/Dockerfile.gpu
     image: vision-inference:gpu
     container_name: vision-inference-gpu
     restart: unless-stopped
@@ -38,7 +38,7 @@ services:
         max-file: '3'
     volumes:
       - vision_images:/app/images
-      - ./static:/app/static
+      - ../static:/app/static
 
 volumes:
   vision_images:

@@ -1,81 +1,94 @@
-# api/ -- ??????
+# api/ -- Application Service Modules
 
-vision-inference ???????
+vision-inference application code directory. FastAPI service is provided from this directory.
 
-## ????
+## Directory Structure
 
 ```
 api/
-??? __init__.py        # ???
-??? config.py          # ?????app-runtime.yaml + .env?
-??? models.py          # ?????YOLO / CLIP / InsightFace?
-??? db.py              # ??????????
-??? storage.py         # ??????? / ?????
-??? device_layer.py    # ??????MAC ? ???????
-??? detection.py       # ???/detect, /describe
-??? faces.py           # ???/face/register, /face/identify, /faces
-??? items.py           # ???/register, /items
-??? search.py          # ???/search
-??? health.py          # ???/, /health
-??? cleanup.py         # ????????
-??? main.py            # FastAPI ???????????
+├── __init__.py        # Package entry
+├── config.py          # Config loader (app-runtime.yaml + .env)
+├── models.py          # Model loading (YOLO / CLIP / InsightFace)
+├── db.py              # DB connection and common queries
+├── storage.py         # Image storage (save / path generation)
+├── device_layer.py    # Device abstraction layer (MAC -> device info)
+├── detection.py       # Routes: /detect, /describe
+├── faces.py           # Routes: /face/register, /face/identify, /faces
+├── items.py           # Routes: /register, /items
+├── search.py          # Routes: /search
+├── health.py          # Routes: /, /health
+├── cleanup.py         # Scheduled cleanup daemon
+└── main.py            # FastAPI app entry, mounts all routers
 ```
 
-## ??????
+## Module Dependencies
 
 ```
 main.py
-  ??? config.py          ? ????????
-  ??? models.py          ? ?? config.py
-  ??? db.py              ? ?? config.py
-  ??? storage.py         ? ?? config.py
-  ??? device_layer.py    ? ?? db.py, config.py
-  ??? detection.py       ? ?? models, db, storage, device_layer
-  ??? faces.py           ? ?? models, db, storage, device_layer
-  ??? items.py           ? ?? models, db
-  ??? search.py          ? ?? db
-  ??? health.py          ? ?? config, models
+  ├── config.py          <- loaded first, no dependencies
+  ├── models.py          <- depends on config.py
+  ├── db.py              <- depends on config.py
+  ├── storage.py         <- depends on config.py
+  ├── device_layer.py    <- depends on db.py, config.py
+  ├── detection.py       <- depends on models, db, storage, device_layer
+  ├── faces.py           <- depends on models, db, storage, device_layer
+  ├── items.py           <- depends on models, db
+  ├── search.py          <- depends on db
+  └── health.py          <- depends on config, models
 ```
 
-## ????
+## Startup Command
 
 ```bash
-# ? vision-inference/ ?????
+# Run from vision-inference/ root directory
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 1
 ```
 
-## ??
+## Configuration
 
-????? vision-inference/ ?????????
+Ensure the following files exist in vision-inference/ before starting:
 
-| ?? | ?? | ??? Git |
-|------|------|-----------|
-| app-runtime.yaml | ??????? | YES |
-| .env | ???????????? | NO |
-| .env.example | ?????? | YES |
+| File | Description | In Git |
+|------|-------------|--------|
+| app-runtime.yaml | Application runtime config | YES |
+| .env | Sensitive config (DB password etc.) | NO |
+| .env.example | Sensitive config template | YES |
 
 ```bash
-# ?????????? .env
+# First-time setup
 cp .env.example .env
-# ?? .env ??????
+# Edit .env and fill in actual password
 ```
 
-## config.py ??
+## config.py Usage
 
 ```python
 from api.config import cfg, get, db_config, face_thresholds
 
-host          = get('database', 'host')         # ?????
-conn          = psycopg2.connect(**db_config())  # ?? DB ????
-high, low     = face_thresholds()               # ??????
-mode          = storage_mode()                  # ????
-path          = image_dir()                     # ???? Path ??
+host       = get("database", "host")         # read single value
+conn       = psycopg2.connect(**db_config())  # get DB connection params
+high, low  = face_thresholds()               # face recognition thresholds
+mode       = storage_mode()                  # storage mode
+path       = image_dir()                     # storage path as Path object
 ```
 
-## ????????
+## Face Recognition Thresholds
 
-| ??? | ?? |
-|--------|------|
-| >= threshold_high (0.75) | ?????????? |
-| 0.40 ~ 0.75 | ????????????? |
-| < threshold_low (0.40) | Unknown?????? |
+| Similarity | Behavior |
+|------------|----------|
+| >= threshold_high (0.75) | High confidence match, return directly |
+| 0.40 ~ 0.75 | Low confidence match, return + auto-learn |
+| < threshold_low (0.40) | Unknown, no action triggered |
+
+## Design Principles
+
+### R1 - ESP32 Responsibility Boundary
+ESP32 is a pure hardware collection endpoint. All computation happens in the container:
+- MAC -> device name/location mapping: done in device_layer.py via DB lookup
+- Image storage path generation: done in storage.py
+- Orientation state management: done in device_layer.py
+
+### R3 - Device Abstraction Layer
+device_layer.py translates raw ESP32 data (MAC, image bytes) into application-layer
+semantics (device name, location, storage path, orientation state).
+All routes access device info through this layer, never via direct DB queries.
