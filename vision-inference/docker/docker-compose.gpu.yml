@@ -15,12 +15,14 @@ services:
               capabilities: [gpu]
     ports:
       - 8000:8000
+    env_file:
+      - ../.env                # DB_PASS etc. (git-ignored)
     environment:
       DEVICE: gpu
       DB_HOST: 192.168.50.118
       DB_PORT: 5432
       DB_USER: wenlei
-      DB_PASS: Homelab@2025
+      DB_PASS: ${DB_PASS}      # from .env
       DB_NAME: vision_db
       IMAGE_STORAGE: retention
       IMAGE_RETENTION_HOURS: 48

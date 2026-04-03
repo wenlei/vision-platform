@@ -3,10 +3,11 @@
 #include <WebServer.h>
 #include "esp_camera.h"
 #include "esp_task_wdt.h"
+#include "secrets.h"          // WIFI_SSID, WIFI_PASSWORD (git-ignored)
 
 // ── WiFi 配置 ──────────────────────────────────────���───────
-const char* ssid     = "701";
-const char* password = "11040109";
+const char* ssid     = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 
 // ── 摄像头引脚（XIAO ESP32-S3 Sense）─────────────────────
 #define PWDN_GPIO_NUM  -1
