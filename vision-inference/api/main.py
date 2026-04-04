@@ -36,12 +36,14 @@ from api.detection import router as detection_router   # noqa: E402
 from api.faces import router as faces_router           # noqa: E402
 from api.items import router as items_router           # noqa: E402
 from api.search import router as search_router         # noqa: E402
+from api.stream_proxy import router as stream_router   # noqa: E402
 
 app.include_router(health_router)
 app.include_router(detection_router)
 app.include_router(faces_router)
 app.include_router(items_router)
 app.include_router(search_router)
+app.include_router(stream_router)
 
 # ── 静态文件服务（Web UI）────────────────────────────────────
 _BASE = Path(__file__).parent.parent
