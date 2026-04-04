@@ -3,69 +3,64 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Desk Cam Viewer — desk-cam-01</title>
+<title>Desk Cam Viewer</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #111; color: #eee; font-family: system-ui, sans-serif;
-         display: flex; flex-direction: column; align-items: center;
-         min-height: 100vh; padding: 16px; gap: 12px; }
-  h1 { font-size: 14px; color: #888; letter-spacing: 0.1em; padding-top: 8px; }
-  #viewport {
-    position: relative; width: 640px; max-width: 100%; aspect-ratio: 4/3;
-    background: #000; border-radius: 8px; overflow: hidden; border: 1px solid #333;
-  }
-  #stream {
-    width: 100%; height: 100%; object-fit: contain; display: block;
-    transition: transform 0.2s ease; transform-origin: center center;
-  }
-  #controls {
-    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
-    background: #1a1a1a; border-radius: 8px; padding: 12px 16px;
-    border: 1px solid #2a2a2a;
-  }
-  button {
-    background: #2a2a2a; color: #ddd; border: 1px solid #3a3a3a;
-    border-radius: 6px; padding: 8px 16px; font-size: 13px; cursor: pointer;
-    transition: all 0.15s;
-  }
-  button:hover { background: #383838; border-color: #555; color: #fff; }
-  button:active { transform: scale(0.97); }
-  button.active { background: #1a4a2a; border-color: #2d7a42; color: #5dcc7a; }
-  button.danger  { background: #2a1a1a; border-color: #7a2d2d; color: #cc5d5d; }
-  .divider { width: 1px; background: #333; margin: 0 4px; }
-  #status-bar { font-size: 11px; color: #555; display: flex; gap: 16px; align-items: center; }
-  #status-dot { width: 6px; height: 6px; border-radius: 50%; background: #2d7a42; }
-  #status-dot.off { background: #7a2d2d; }
-  #save-toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: #1a4a2a; color: #5dcc7a; padding: 8px 20px;
-    border-radius: 20px; font-size: 13px; border: 1px solid #2d7a42;
-    opacity: 0; transition: opacity 0.3s; pointer-events: none;
-  }
-  #save-toast.show { opacity: 1; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#111; color:#eee; font-family:system-ui,sans-serif;
+  display:flex; flex-direction:column; align-items:center;
+  min-height:100vh; padding:16px; gap:12px;
+}
+h1 { font-size:14px; color:#888; letter-spacing:0.1em; padding-top:8px; }
+#viewport {
+  position:relative; width:640px; max-width:100%; aspect-ratio:4/3;
+  background:#000; border-radius:8px; overflow:hidden; border:1px solid #333;
+}
+#stream { width:100%; height:100%; object-fit:contain; display:block; }
+#controls {
+  display:flex; gap:8px; flex-wrap:wrap; justify-content:center;
+  background:#1a1a1a; border-radius:8px; padding:12px 16px;
+  border:1px solid #2a2a2a;
+}
+button {
+  background:#2a2a2a; color:#ddd; border:1px solid #3a3a3a;
+  border-radius:6px; padding:8px 16px; font-size:13px; cursor:pointer;
+  transition:all 0.15s;
+}
+button:hover  { background:#383838; border-color:#555; color:#fff; }
+button:active { transform:scale(0.97); }
+button.active { background:#1a4a2a; border-color:#2d7a42; color:#5dcc7a; }
+button.danger { background:#2a1a1a; border-color:#7a2d2d; color:#cc5d5d; }
+.divider { width:1px; background:#333; margin:0 4px; }
+#status-bar { font-size:11px; color:#555; display:flex; gap:16px; align-items:center; }
+#status-dot { width:6px; height:6px; border-radius:50%; background:#2d7a42; }
+#status-dot.off { background:#7a2d2d; }
+#save-toast {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  background:#1a4a2a; color:#5dcc7a; padding:8px 20px;
+  border-radius:20px; font-size:13px; border:1px solid #2d7a42;
+  opacity:0; transition:opacity 0.3s; pointer-events:none;
+}
+#save-toast.show { opacity:1; }
 </style>
 </head>
 <body>
-
-<h1>📷 DESK-CAM-01 &nbsp;·&nbsp; 192.168.50.87</h1>
+<h1>DESK-CAM-01 &nbsp;&middot;&nbsp; 192.168.50.87</h1>
 
 <div id="viewport">
-  <img id="stream" id="stream" data-src="http://192.168.50.87:81/"
-       alt="camera stream" onerror="onStreamError()">
+  <img id="stream" alt="camera stream" onerror="onStreamError()">
 </div>
 
 <div id="controls">
-  <!-- 旋转：纯 CSS，不碰固件 -->
-  <button onclick="rotateCW()">↻ 顺时针</button>
-  <button onclick="rotateCCW()">↺ 逆时针</button>
+  <button onclick="rotateCW()">&#8635; 顺时针 90°</button>
+  <button onclick="rotateCCW()">&#8634; 逆时针 90°</button>
   <div class="divider"></div>
-  <!-- 镜像/翻转：纯固件，不叠 CSS -->
-  <button id="btn-hmirror" onclick="toggleMirror()">⟺ 镜像</button>
-  <button id="btn-vflip"   onclick="toggleVFlip()">↕ 上下翻转</button>
+  <button id="btn-hmirror" onclick="toggleMirror()">&#8660; 镜像</button>
+  <button id="btn-vflip"   onclick="toggleVFlip()">&#8661; 上下翻转</button>
   <div class="divider"></div>
-  <button onclick="screenshot()">📷 截屏保存</button>
+  <button onclick="screenshot()">截屏保存</button>
   <div class="divider"></div>
-  <button class="danger" onclick="resetAll()">✕ 重置</button>
+  <button class="danger" onclick="resetAll()">重置</button>
 </div>
 
 <div id="status-bar">
@@ -74,78 +69,79 @@
   <span id="orientation-text"></span>
 </div>
 
-<div id="save-toast">✓ 截图已保存</div>
+<div id="save-toast">截图已保存</div>
 
 <script>
+const API   = '';
 const ESP32 = 'http://192.168.50.87';
 const img   = document.getElementById('stream');
 
-// ── 状态 ─────────────────────────────────────────────────────
-// cssDeg：顺/逆时针旋转角度（纯 CSS，不写固件）
-// vflip / hmirror：固件传感器状态（写入后图像像素已翻转，CSS 不重复处理）
-let cssDeg  = 0;
+let rotate  = 0;
 let vflip   = 0;
 let hmirror = 0;
 
-// ── CSS 旋转（仅旋转，不含镜像——镜像由固件处理）─────────────
-function applyRotation() {
-  img.style.transform = cssDeg ? `rotate(${cssDeg}deg)` : '';
-  updateOrientationText();
+function startStream() {
+  img.src = '';
+  setTimeout(() => { img.src = API + '/stream?t=' + Date.now(); }, 100);
 }
 
-function rotateCW()  { cssDeg = (cssDeg + 90)       % 360; applyRotation(); }
-function rotateCCW() { cssDeg = (cssDeg - 90 + 360) % 360; applyRotation(); }
-
-// ── 固件控制（写传感器，不叠 CSS）────────────────────────────
-async function sendConfig(params) {
+ansync function setRotate(deg) {
+  deg = ((deg % 360) + 360) % 360;
   try {
-    const res  = await fetch(`${ESP32}/config?${params}`);
+    const res = await fetch(API + '/stream/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rotate: deg })
+    });
     const data = await res.json();
-    // 用固件返回的实际值更新状态，避免本地猜测
+    rotate = data.updated?.rotate ?? deg;
+    updateOrientationText();
+    startStream();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function rotateCW()  { setRotate(rotate + 90); }
+function rotateCCW() { setRotate(rotate - 90); }
+
+async function sendESP32Config(params) {
+  try {
+    const res  = await fetch(ESP32 + '/config?' + params);
+    const data = await res.json();
     vflip   = data.vflip;
     hmirror = data.hmirror;
     updateButtons();
     updateOrientationText();
-  } catch(e) {
-    alert('无法连接摄像头，请检查固件是否已烧录');
-  }
+    startStream();
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
-function toggleMirror() { sendConfig(`hmirror=${hmirror ? 0 : 1}`); }
-function toggleVFlip()  { sendConfig(`vflip=${vflip ? 0 : 1}`); }
+function toggleMirror() { sendESP32Config('hmirror=' + (hmirror ? 0 : 1)); }
+function toggleVFlip()  { sendESP32Config('vflip='   + (vflip   ? 0 : 1)); }
 
-// ── 截屏（fetch /capture，在 Canvas 合并 CSS 旋转角度）────────
-// 固件图像已含 hmirror/vflip，Canvas 只需再叠 CSS 旋转角度
 async function screenshot() {
   try {
-    const res  = await fetch(`${ESP32}/capture`);
+    const res  = await fetch(ESP32 + '/capture');
     const blob = await res.blob();
     const bmp  = await createImageBitmap(blob);
     const w = bmp.width, h = bmp.height;
-    const rad = cssDeg * Math.PI / 180;
-
+    const rad = rotate * Math.PI / 180;
     const canvas = document.createElement('canvas');
-    const rotated = (cssDeg === 90 || cssDeg === 270);
+    const rotated = (rotate === 90 || rotate === 270);
     canvas.width  = rotated ? h : w;
     canvas.height = rotated ? w : h;
-
     const ctx = canvas.getContext('2d');
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.rotate(rad);
     ctx.drawImage(bmp, -w / 2, -h / 2);
-
     canvas.toBlob(b => {
       const a = document.createElement('a');
-      a.download = `desk-cam-${Date.now()}.jpg`;
+      a.download = 'desk-cam-' + Date.now() + '.jpg';
       a.href = URL.createObjectURL(b);
       a.click();
       URL.revokeObjectURL(a.href);
       showToast();
     }, 'image/jpeg', 0.92);
-
-  } catch(e) {
-    alert('截屏失败，请检查摄像头连接');
-  }
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 function showToast() {
@@ -154,14 +150,11 @@ function showToast() {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// ── 重置 ──────────────────────────────────────────────────────
 async function resetAll() {
-  cssDeg = 0;
-  applyRotation();
-  await sendConfig('vflip=0&hmirror=0');
+  await setRotate(0);
+  await sendESP32Config('vflip=0&hmirror=0');
 }
 
-// ── UI 同步 ───────────────────────────────────────────────────
 function updateButtons() {
   document.getElementById('btn-hmirror').classList.toggle('active', hmirror === 1);
   document.getElementById('btn-vflip').classList.toggle('active',   vflip   === 1);
@@ -169,33 +162,34 @@ function updateButtons() {
 
 function updateOrientationText() {
   const parts = [];
-  if (cssDeg)   parts.push(`旋转 ${cssDeg}°`);
-  if (hmirror)  parts.push('水平镜像');
-  if (vflip)    parts.push('上下翻转');
+  if (rotate)  parts.push('rotated ' + rotate + 'deg');
+  if (hmirror) parts.push('mirror');
+  if (vflip)   parts.push('vflip');
   document.getElementById('orientation-text').textContent =
     parts.length ? '· ' + parts.join(' · ') : '';
 }
 
 function onStreamError() {
   document.getElementById('status-dot').className = 'off';
-  document.getElementById('status-text').textContent = '摄像头离线，请烧录固件后刷新';
+  document.getElementById('status-text').textContent = 'stream error';
 }
 
-// ── 启动时同步固件当前状态 ────────────────────────────────────
 async function init() {
   try {
-    const res  = await fetch(`${ESP32}/status`);
+    const res  = await fetch(API + '/stream/config');
     const data = await res.json();
+    rotate  = data.rotate  ?? 0;
     vflip   = data.vflip   ?? 0;
     hmirror = data.hmirror ?? 0;
     updateButtons();
     updateOrientationText();
     document.getElementById('status-dot').className = '';
-    document.getElementById('status-text').textContent =
-      `在线 · ${data.ip} · ${data.mac}`;
+    document.getElementById('status-text').textContent = 'online :8000';
   } catch(e) {
-    onStreamError();
+    document.getElementById('status-text').textContent = 'service offline';
+    document.getElementById('status-dot').className = 'off';
   }
+  startStream();
 }
 
 init();

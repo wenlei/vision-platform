@@ -41,6 +41,8 @@ services:
     volumes:
       - vision_images:/app/images
       - ../UI:/app/UI
+      - ../api:/app/api
+      - ../app-runtime.yaml:/app/app-runtime.yaml
 
 volumes:
   vision_images:
