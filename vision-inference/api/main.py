@@ -50,6 +50,6 @@ _BASE = Path(__file__).parent.parent
 UI_DIR = _BASE / "UI"
 if UI_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(UI_DIR)), name="static")
-    log.info("Static files mounted at /static from %s", UI_DIR)
+    log.info("Static files mounted at /ui from %s", UI_DIR)
 
 log.info("Vision Inference Service ready")
