@@ -84,6 +84,8 @@ camera:
   default_vflip: 0           # 0=正常 | 1=上下翻转
   default_hmirror: 0         # 0=正常 | 1=水平镜像
   rotate: 0                  # 服务端旋转：0 / 90 / 180 / 270（顺时针）
+  hmirror: 0                 # 服务端水平镜像：0/1（Pillow 处理，不写 ESP32）
+  vflip: 0                   # 服务端垂直翻转：0/1（Pillow 处理，不写 ESP32）
   source: http://192.168.50.87:81/  # ESP32 MJPEG 源流地址
 
 

@@ -230,6 +230,34 @@ void handleCapture() {
     esp_camera_fb_return(fb);
 }
 
+
+// ── MJPEG 流任务（FreeRTOS）──────────────────────────────
+// 在独立任务里处理 MJPEG 流客户端，不阻塞主 loop。
+// 同一时刻只允许一个流客户端。
+TaskHandle_t streamTaskHandle = NULL;
+WiFiClient   activeStreamClient;
+
+void streamTask(void* param) {
+    handleStreamClient(activeStreamClient);
+    activeStreamClient.stop();
+    streamTaskHandle = NULL;
+    vTaskDelete(NULL);
+}
+
+
+// ── MJPEG 流任务（FreeRTOS）──────────────────────────────
+// 在独立任务里处理 MJPEG 流客户端，不阻塞主 loop。
+// 同一时刻只允许一个流客户端。
+TaskHandle_t streamTaskHandle = NULL;
+WiFiClient   activeStreamClient;
+
+void streamTask(void* param) {
+    handleStreamClient(activeStreamClient);
+    activeStreamClient.stop();
+    streamTaskHandle = NULL;
+    vTaskDelete(NULL);
+}
+
 // ── MJPEG stream :81 ──────────────────────────────────────
 // 处理单个 MJPEG 流客户端连接，持续推送帧直到客户端断开。
 // 使用 multipart/x-mixed-replace 边界协议，浏览器原生支持。
@@ -347,7 +375,7 @@ void setup() {
     streamServer.begin();
 
     // 启用任务看门狗（8 秒超时），防止主循环卡死
-    esp_task_wdt_init(8, true);
+    esp_task_wdt_init(30, true);  // 延长超时，流任务不喂狗
     esp_task_wdt_add(NULL);
 
     addLog("Ready: :80/status,capture,config,logs :81/stream");
@@ -362,10 +390,27 @@ void loop() {
     if (WiFi.status() == WL_CONNECTED) {
         server.handleClient();  // 处理 :80 REST 请求
 
-        // 检查是否有 MJPEG 流客户端接入
+        // 检查是否有 MJPEG 流客户端接入（非阻塞，用 FreeRTOS 任务处理）
         WiFiClient streamClient = streamServer.available();
         if (streamClient) {
-            handleStreamClient(streamClient);  // 阻塞直到客户端断开
+            if (streamTaskHandle == NULL) {
+                // 没有正在进行的流，启动新任务
+                activeStreamClient = streamClient;
+                xTaskCreatePinnedToCore(
+                    streamTask,        // 任务函数
+                    "mjpeg_stream",    // 任务名
+                    8192,              // 栈大小（字节）
+                    NULL,              // 参数
+                    1,                 // 优先级
+                    &streamTaskHandle, // 任务句柄
+                    1                  // 核心 1（主 loop 在核心 1）
+                );
+                addLog("Stream task started");
+            } else {
+                // 已有流客户端，拒绝新连接
+                streamClient.stop();
+                addLog("Stream busy, rejected new client");
+            }
         }
     }
 }

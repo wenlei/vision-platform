@@ -1,26 +1,19 @@
 """
-stream_proxy.py -- MJPEG ?????
+stream_proxy.py -- MJPEG stream proxy
 
-???
-  ? ESP32 :81 ?? MJPEG ????? app-runtime.yaml ????
-  ????????????? FastAPI ??? UI?
+Routes:
+  GET /stream             proxy default camera MJPEG stream
+  GET /stream/{mac}       proxy specified MAC camera
+  GET /stream/config      query rotate/hmirror/vflip/source config
+  POST /stream/config     update config, persist to app-runtime.yaml
 
-  UI ?????? ESP32:81????? /stream?
-
-???
-  GET /stream             ???????? MJPEG ?
-  GET /stream/{mac}       ???? MAC ???? MJPEG ?
-  GET /stream/config      ???????
-  POST /stream/config     ??????????? app-runtime.yaml
-
-?????
-  rotate ????? Pillow ?????????????
-  UI ???? CSS transform???????
-  rotate ????0 / 90 / 180 / 270?????
+All image transforms (rotate, hmirror, vflip) are done server-side
+with Pillow. No ESP32 sensor writes needed.
 """
 
 import io
 import logging
+import asyncio
 import httpx
 import yaml
 from pathlib import Path
@@ -35,42 +28,48 @@ router = APIRouter(prefix="/stream", tags=["stream"])
 
 
 def _camera_cfg() -> dict:
-    """? cfg ?? camera ?????????"""
     return cfg.get("camera", {})
 
 
 def _esp32_stream_url(mac: str = None) -> str:
-    """
-    ?? ESP32 MJPEG ?? URL?
-    ??? app-runtime.yaml camera.source ???
-    ????? device_layer ? MAC ? DB ?? IP?
-    """
     return _camera_cfg().get("source", "http://192.168.50.87:81/")
 
 
 def _rotate_degrees() -> int:
-    """????????????0/90/180/270??"""
     return int(_camera_cfg().get("rotate", 0))
 
 
-def _rotate_frame(jpeg_bytes: bytes, degrees: int) -> bytes:
+def _hmirror() -> int:
+    return int(_camera_cfg().get("hmirror", 0))
+
+
+def _vflip() -> int:
+    return int(_camera_cfg().get("vflip", 0))
+
+
+def _process_frame(jpeg_bytes: bytes, rotate: int, hmirror: int, vflip: int) -> bytes:
     """
-    ??? JPEG ????????
-    degrees=0 ????????????? CPU?
+    Apply server-side image transforms using Pillow.
+    All of rotate/hmirror/vflip are handled here, not on ESP32.
+    Returns original bytes unchanged when all params are 0.
     """
-    if degrees == 0:
+    if rotate == 0 and hmirror == 0 and vflip == 0:
         return jpeg_bytes
     img = Image.open(io.BytesIO(jpeg_bytes))
-    rotated = img.rotate(-degrees, expand=True)  # Pillow ????????
+    if hmirror:
+        img = img.transpose(Image.FLIP_LEFT_RIGHT)
+    if vflip:
+        img = img.transpose(Image.FLIP_TOP_BOTTOM)
+    if rotate:
+        img = img.rotate(-rotate, expand=True)
     buf = io.BytesIO()
-    rotated.save(buf, format="JPEG", quality=85)
+    img.save(buf, format="JPEG", quality=85)
     return buf.getvalue()
 
 
-async def _iter_mjpeg_frames(source_url: str, rotate: int):
+async def _iter_mjpeg_frames(source_url: str, rotate: int, hmirror: int = 0, vflip: int = 0):
     """
-    ??????? source_url ?? MJPEG ??
-    ?????? yield multipart ??????
+    Async generator: pull MJPEG from ESP32, apply transforms, yield multipart frames.
     """
     async with httpx.AsyncClient(timeout=None) as client:
         async with client.stream("GET", source_url) as response:
@@ -90,9 +89,9 @@ async def _iter_mjpeg_frames(source_url: str, rotate: int):
                     jpeg = buf[soi:eoi + 2]
                     buf = buf[eoi + 2:]
                     try:
-                        frame = _rotate_frame(jpeg, rotate)
+                        frame = _process_frame(jpeg, rotate, hmirror, vflip)
                     except Exception as e:
-                        log.warning("Frame rotate failed: %s", e)
+                        log.warning("Frame process failed: %s", e)
                         frame = jpeg
                     yield (
                         b"--frame\r\n"
@@ -103,47 +102,56 @@ async def _iter_mjpeg_frames(source_url: str, rotate: int):
                     )
 
 
-# ?? ?? ?????????????????????????????????????????????????????
+# ── Routes ────────────────────────────────────────────────
 
 @router.get("")
 @router.get("/")
 async def stream_default():
-    """???????? MJPEG ??????????????"""
+    """Proxy default camera MJPEG stream with server-side transforms."""
     source_url = _esp32_stream_url()
     rotate = _rotate_degrees()
-    log.info("Streaming from %s rotate=%d", source_url, rotate)
+    hmirror = _hmirror()
+    vflip = _vflip()
+    log.info("Streaming from %s rotate=%d hmirror=%d vflip=%d", source_url, rotate, hmirror, vflip)
     return StreamingResponse(
-        _iter_mjpeg_frames(source_url, rotate),
+        _iter_mjpeg_frames(source_url, rotate, hmirror, vflip),
         media_type="multipart/x-mixed-replace; boundary=frame",
     )
 
 
 @router.get("/config")
 def get_stream_config():
-    """????????rotate?source?vflip?hmirror??"""
+    """Return current stream config (rotate/hmirror/vflip all handled server-side)."""
     cam = _camera_cfg()
     return {
-        "source":  cam.get("source", "http://192.168.50.87:81/"),
-        "rotate":  int(cam.get("rotate", 0)),
-        "vflip":   int(cam.get("default_vflip", 0)),
-        "hmirror": int(cam.get("default_hmirror", 0)),
+        "source":  cam.get("source",  "http://192.168.50.87:81/"),
+        "rotate":  int(cam.get("rotate",  0)),
+        "hmirror": int(cam.get("hmirror", 0)),
+        "vflip":   int(cam.get("vflip",   0)),
     }
 
 
 class StreamConfigUpdate(BaseModel):
-    """??????????"""
-    rotate: int = None   # ????????0 / 90 / 180 / 270
-    source: str = None   # ?? ESP32 ?? URL????
+    """Update stream config. rotate/hmirror/vflip all processed server-side by Pillow."""
+    rotate:  int = None   # clockwise degrees: 0/90/180/270
+    hmirror: int = None   # horizontal mirror: 0/1
+    vflip:   int = None   # vertical flip: 0/1
+    source:  str = None   # override ESP32 stream URL (optional)
 
 
 @router.post("/config")
 def update_stream_config(body: StreamConfigUpdate):
     """
-    ?????????? app-runtime.yaml?
-    ???? cfg ?????????????
+    Update stream config and persist to app-runtime.yaml.
+    rotate/hmirror/vflip are applied by Pillow on every frame.
+    Takes effect immediately (in-memory cfg updated).
     """
     if body.rotate is not None and body.rotate not in (0, 90, 180, 270):
         raise HTTPException(status_code=400, detail="rotate must be 0, 90, 180, or 270")
+    if body.hmirror is not None and body.hmirror not in (0, 1):
+        raise HTTPException(status_code=400, detail="hmirror must be 0 or 1")
+    if body.vflip is not None and body.vflip not in (0, 1):
+        raise HTTPException(status_code=400, detail="vflip must be 0 or 1")
 
     runtime_path = BASE_DIR / "app-runtime.yaml"
     try:
@@ -156,14 +164,12 @@ def update_stream_config(body: StreamConfigUpdate):
         raw["camera"] = {}
 
     changed = {}
-    if body.rotate is not None:
-        raw["camera"]["rotate"] = body.rotate
-        cfg.setdefault("camera", {})["rotate"] = body.rotate
-        changed["rotate"] = body.rotate
-    if body.source is not None:
-        raw["camera"]["source"] = body.source
-        cfg.setdefault("camera", {})["source"] = body.source
-        changed["source"] = body.source
+    for field in ("rotate", "hmirror", "vflip", "source"):
+        val = getattr(body, field)
+        if val is not None:
+            raw["camera"][field] = val
+            cfg.setdefault("camera", {})[field] = val
+            changed[field] = val
 
     if not changed:
         return JSONResponse({"status": "no change"})
@@ -178,64 +184,16 @@ def update_stream_config(body: StreamConfigUpdate):
     return {"status": "ok", "updated": changed}
 
 
-
-
-@router.get("/camera/config")
-async def get_camera_config():
-    """
-    代理 ESP32 /status 接口，返回当前 vflip/hmirror 状态。
-    UI 只需和推理服务通信，不直接访问 ESP32。
-    """
-    source = _esp32_stream_url()
-    esp32_base = source.rstrip("/").rsplit(":", 1)[0]  # http://192.168.50.87
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            res = await client.get(esp32_base + "/status")
-            data = res.json()
-            return {
-                "status": "ok",
-                "vflip": data.get("vflip", 0),
-                "hmirror": data.get("hmirror", 0),
-            }
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"ESP32 unreachable: {e}")
-
-
-@router.post("/camera/config")
-async def set_camera_config(vflip: int = None, hmirror: int = None):
-    """
-    代理 ESP32 /config 接口，设置 vflip/hmirror。
-    由推理服务转发，避免 UI 直连 ESP32 时被 MJPEG 流阻塞。
-    params 通过 query string 传递：POST /stream/camera/config?vflip=1&hmirror=0
-    """
-    source = _esp32_stream_url()
-    esp32_base = source.rstrip("/").rsplit(":", 1)[0]
-    params = {}
-    if vflip is not None:
-        params["vflip"] = vflip
-    if hmirror is not None:
-        params["hmirror"] = hmirror
-    if not params:
-        raise HTTPException(status_code=400, detail="vflip or hmirror required")
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            res = await client.get(esp32_base + "/config", params=params)
-            data = res.json()
-            log.info("Camera config updated: %s", params)
-            return data
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"ESP32 unreachable: {e}")
-
 @router.get("/{mac}")
 async def stream_by_mac(mac: str):
-    """
-    ???? MAC ???? MJPEG ??
-    ???????? source???? device_layer ? DB ?? IP?
-    """
+    """Proxy specified MAC camera MJPEG stream."""
     source_url = _esp32_stream_url(mac)
     rotate = _rotate_degrees()
-    log.info("Streaming mac=%s from %s rotate=%d", mac, source_url, rotate)
+    hmirror = _hmirror()
+    vflip = _vflip()
+    log.info("Streaming mac=%s from %s rotate=%d hmirror=%d vflip=%d",
+             mac, source_url, rotate, hmirror, vflip)
     return StreamingResponse(
-        _iter_mjpeg_frames(source_url, rotate),
+        _iter_mjpeg_frames(source_url, rotate, hmirror, vflip),
         media_type="multipart/x-mixed-replace; boundary=frame",
     )
