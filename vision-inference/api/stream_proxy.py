@@ -178,6 +178,54 @@ def update_stream_config(body: StreamConfigUpdate):
     return {"status": "ok", "updated": changed}
 
 
+
+
+@router.get("/camera/config")
+async def get_camera_config():
+    """
+    代理 ESP32 /status 接口，返回当前 vflip/hmirror 状态。
+    UI 只需和推理服务通信，不直接访问 ESP32。
+    """
+    source = _esp32_stream_url()
+    esp32_base = source.rstrip("/").rsplit(":", 1)[0]  # http://192.168.50.87
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            res = await client.get(esp32_base + "/status")
+            data = res.json()
+            return {
+                "status": "ok",
+                "vflip": data.get("vflip", 0),
+                "hmirror": data.get("hmirror", 0),
+            }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"ESP32 unreachable: {e}")
+
+
+@router.post("/camera/config")
+async def set_camera_config(vflip: int = None, hmirror: int = None):
+    """
+    代理 ESP32 /config 接口，设置 vflip/hmirror。
+    由推理服务转发，避免 UI 直连 ESP32 时被 MJPEG 流阻塞。
+    params 通过 query string 传递：POST /stream/camera/config?vflip=1&hmirror=0
+    """
+    source = _esp32_stream_url()
+    esp32_base = source.rstrip("/").rsplit(":", 1)[0]
+    params = {}
+    if vflip is not None:
+        params["vflip"] = vflip
+    if hmirror is not None:
+        params["hmirror"] = hmirror
+    if not params:
+        raise HTTPException(status_code=400, detail="vflip or hmirror required")
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            res = await client.get(esp32_base + "/config", params=params)
+            data = res.json()
+            log.info("Camera config updated: %s", params)
+            return data
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"ESP32 unreachable: {e}")
+
 @router.get("/{mac}")
 async def stream_by_mac(mac: str):
     """

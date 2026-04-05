@@ -111,7 +111,7 @@ function rotateCCW() { setRotate(rotate - 90); }
 
 async function sendESP32Config(params) {
   try {
-    const res = await fetch(ESP32 + '/config?' + params);
+    const res = await fetch(API + '/stream/camera/config?' + params, {method:'POST'});
     const data = await res.json();
     vflip = data.vflip; hmirror = data.hmirror;
     updateButtons(); updateOrientationText();
