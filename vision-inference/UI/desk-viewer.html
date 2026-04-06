@@ -6,24 +6,49 @@
 <title>Desk Cam Viewer</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:#111; color:#eee; font-family:system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; min-height:100vh; padding:16px; gap:12px; }
+body { background:#111; color:#eee; font-family:system-ui,sans-serif;
+  display:flex; flex-direction:column; align-items:center;
+  min-height:100vh; padding:16px; gap:12px; }
 h1 { font-size:14px; color:#888; letter-spacing:0.1em; padding-top:8px; }
-#viewport { position:relative; width:640px; max-width:100%; aspect-ratio:4/3; background:#000; border-radius:8px; overflow:hidden; border:1px solid #333; display:flex; align-items:center; justify-content:center; }
-#stream { width:100%; height:100%; object-fit:contain; display:block; }
-#placeholder { color:#444; font-size:13px; position:absolute; pointer-events:none; }
-#controls { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; background:#1a1a1a; border-radius:8px; padding:12px 16px; border:1px solid #2a2a2a; }
-button { background:#2a2a2a; color:#ddd; border:1px solid #3a3a3a; border-radius:6px; padding:8px 16px; font-size:13px; cursor:pointer; transition:all 0.15s; }
-button:hover { background:#383838; border-color:#555; color:#fff; }
+#viewport {
+  width:640px; max-width:100%; aspect-ratio:4/3;
+  background:#000; border-radius:8px; overflow:hidden;
+  border:1px solid #333; position:relative;
+  display:flex; align-items:center; justify-content:center;
+}
+#stream {
+  width:100%; height:100%; object-fit:contain;
+  display:block; position:absolute; top:0; left:0;
+  transition: transform 0.2s;
+}
+#placeholder { color:#444; font-size:13px; pointer-events:none; }
+#controls { display:flex; gap:8px; flex-wrap:wrap; justify-content:center;
+  background:#1a1a1a; border-radius:8px; padding:12px 16px;
+  border:1px solid #2a2a2a; }
+button { background:#2a2a2a; color:#ddd; border:1px solid #3a3a3a;
+  border-radius:6px; padding:8px 16px; font-size:13px;
+  cursor:pointer; transition:all 0.15s; }
+button:hover  { background:#383838; border-color:#555; color:#fff; }
 button:active { transform:scale(0.97); }
 button.active { background:#1a4a2a; border-color:#2d7a42; color:#5dcc7a; }
 button.danger { background:#2a1a1a; border-color:#7a2d2d; color:#cc5d5d; }
+button.confirm { background:#1a3a1a; border-color:#2d7a42; color:#5dcc7a;
+  font-weight:600; min-width:80px; }
+button.confirm:hover { background:#2a5a2a; }
 button#btn-connect { min-width:72px; }
 .divider { width:1px; background:#333; margin:0 4px; }
 #status-bar { font-size:11px; color:#555; display:flex; gap:16px; align-items:center; }
 #status-dot { width:6px; height:6px; border-radius:50%; background:#555; }
-#status-dot.on { background:#2d7a42; }
+#status-dot.on  { background:#2d7a42; }
 #status-dot.off { background:#7a2d2d; }
-#save-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#1a4a2a; color:#5dcc7a; padding:8px 20px; border-radius:20px; font-size:13px; border:1px solid #2d7a42; opacity:0; transition:opacity 0.3s; pointer-events:none; }
+#saved-badge { font-size:10px; background:#1a3a1a; color:#5dcc7a;
+  border:1px solid #2d7a42; border-radius:4px; padding:2px 8px;
+  opacity:0; transition:opacity 0.3s; }
+#saved-badge.show { opacity:1; }
+#save-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  background:#1a4a2a; color:#5dcc7a; padding:8px 20px;
+  border-radius:20px; font-size:13px; border:1px solid #2d7a42;
+  opacity:0; transition:opacity 0.3s; pointer-events:none; }
 #save-toast.show { opacity:1; }
 </style>
 </head>
@@ -33,45 +58,58 @@ button#btn-connect { min-width:72px; }
   <img id="stream" alt="" style="display:none">
   <span id="placeholder">点击「连接」开始预览</span>
 </div>
+
 <div id="controls">
   <button id="btn-connect" onclick="toggleStream()">连接</button>
   <div class="divider"></div>
-  <button onclick="rotateCW()">&#8635; 顺时针 90°</button>
-  <button onclick="rotateCCW()">&#8634; 逆时针 90°</button>
+  <button onclick="rotateCW()">&#8635; 顺时针</button>
+  <button onclick="rotateCCW()">&#8634; 逆时针</button>
   <div class="divider"></div>
   <button id="btn-hmirror" onclick="toggleMirror()">&#8660; 镜像</button>
-  <button id="btn-vflip" onclick="toggleVFlip()">&#8661; 上下翻转</button>
+  <button id="btn-vflip"   onclick="toggleVFlip()">&#8661; 上下翻转</button>
   <div class="divider"></div>
-  <button onclick="screenshot()">截屏保存</button>
+  <button class="confirm" onclick="saveOrientation()">✓ 完成</button>
   <div class="divider"></div>
+  <button onclick="screenshot()">截屏</button>
   <button class="danger" onclick="resetAll()">重置</button>
 </div>
+
 <div id="status-bar">
   <div id="status-dot"></div>
   <span id="status-text">待连接</span>
   <span id="orientation-text"></span>
+  <span id="saved-badge">已保存</span>
 </div>
-<div id="save-toast">截图已保存</div>
-<script>
-const API = '';
-const img = document.getElementById('stream');
-const ph  = document.getElementById('placeholder');
-let rotate = 0, vflip = 0, hmirror = 0, streaming = false;
 
-function setStatus(dot, text) {
-  document.getElementById('status-dot').className = dot;
-  document.getElementById('status-text').textContent = text;
+<div id="save-toast">截图已保存</div>
+
+<script>
+const API    = 'http://192.168.50.71:8000';
+const ESP32  = 'http://192.168.50.87';
+const img    = document.getElementById('stream');
+const ph     = document.getElementById('placeholder');
+let rotate = 0, hmirror = 0, vflip = 0, streaming = false;
+
+// ── CSS transform 即时显示 ──────────────────────────────
+function applyTransform() {
+  // CSS 顺序：先镜像/翻转，再旋转
+  let t = '';
+  if (hmirror) t += ' scaleX(-1)';
+  if (vflip)   t += ' scaleY(-1)';
+  if (rotate)  t += ` rotate(${rotate}deg)`;
+  img.style.transform = t.trim() || 'none';
+  updateButtons();
+  updateOrientationText();
 }
 
+// ── 连接 / 断开流 ──────────────────────────────────────
 function toggleStream() { streaming ? stopStream() : startStream(); }
 
 function startStream() {
   streaming = true;
   img.style.display = 'block';
-  ph.style.display = 'none';
-  // 完全断开再重连，确保新配置生效
-  img.src = '';
-  setTimeout(() => { img.src = API + '/stream?t=' + Date.now(); }, 300);
+  ph.style.display  = 'none';
+  img.src = API + '/stream?t=' + Date.now();
   document.getElementById('btn-connect').textContent = '断开';
   document.getElementById('btn-connect').classList.add('active');
   setStatus('on', '流连接中…');
@@ -79,55 +117,54 @@ function startStream() {
 
 function stopStream() {
   streaming = false;
-  img.src = '';
+  img.src   = '';
   img.style.display = 'none';
-  ph.style.display = 'block';
-  ph.textContent = '点击「连接」开始预览';
+  ph.style.display  = 'block';
   document.getElementById('btn-connect').textContent = '连接';
   document.getElementById('btn-connect').classList.remove('active');
   setStatus('', '已断开');
 }
 
-// 所有方向控制统一走 POST /stream/config
-async function setConfig(params) {
+// ── 方向控制（纯 CSS，即时生效）──────────────────────────
+function rotateCW()     { rotate = (rotate + 90)  % 360; applyTransform(); }
+function rotateCCW()    { rotate = (rotate - 90 + 360) % 360; applyTransform(); }
+function toggleMirror() { hmirror = hmirror ? 0 : 1; applyTransform(); }
+function toggleVFlip()  { vflip   = vflip   ? 0 : 1; applyTransform(); }
+
+// ── 完成：把当前参数保存到服务器 ─────────────────────────
+async function saveOrientation() {
   try {
-    const res = await fetch(API + '/stream/config', {
-      method: 'POST',
+    const res  = await fetch(API + '/stream/config', {
+      method:  'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(params)
+      body:    JSON.stringify({ rotate, hmirror, vflip })
     });
     const data = await res.json();
-    if (data.updated) {
-      if (data.updated.rotate  !== undefined) rotate  = data.updated.rotate;
-      if (data.updated.hmirror !== undefined) hmirror = data.updated.hmirror;
-      if (data.updated.vflip   !== undefined) vflip   = data.updated.vflip;
-    }
-    updateButtons();
-    updateOrientationText();
-    // 重连流以应用新配置
-    if (streaming) startStream();
-  } catch(e) { alert('配置失败：' + e.message); }
+    const badge = document.getElementById('saved-badge');
+    badge.classList.add('show');
+    setTimeout(() => badge.classList.remove('show'), 2000);
+    console.log('orientation saved:', data);
+  } catch(e) { alert('保存失败：' + e.message); }
 }
 
-function rotateCW()      { setConfig({rotate: ((rotate + 90)  % 360 + 360) % 360}); }
-function rotateCCW()     { setConfig({rotate: ((rotate - 90)  % 360 + 360) % 360}); }
-function toggleMirror()  { setConfig({hmirror: hmirror ? 0 : 1}); }
-function toggleVFlip()   { setConfig({vflip:   vflip   ? 0 : 1}); }
-
+// ── 截屏（按当前 CSS 变换裁剪）──────────────────────────
 async function screenshot() {
   try {
-    const res  = await fetch('http://192.168.50.87/capture');
+    const res  = await fetch(ESP32 + '/capture');
     const blob = await res.blob();
     const bmp  = await createImageBitmap(blob);
-    const w = bmp.width, h = bmp.height, rad = rotate * Math.PI / 180;
+    const w = bmp.width, h = bmp.height;
+    const rad = rotate * Math.PI / 180;
+    const rot90 = (rotate === 90 || rotate === 270);
     const canvas = document.createElement('canvas');
-    const rot90  = (rotate === 90 || rotate === 270);
     canvas.width  = rot90 ? h : w;
     canvas.height = rot90 ? w : h;
     const ctx = canvas.getContext('2d');
-    ctx.translate(canvas.width/2, canvas.height/2);
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    if (hmirror) ctx.scale(-1, 1);
+    if (vflip)   ctx.scale(1, -1);
     ctx.rotate(rad);
-    ctx.drawImage(bmp, -w/2, -h/2);
+    ctx.drawImage(bmp, -w / 2, -h / 2);
     canvas.toBlob(b => {
       const a = document.createElement('a');
       a.download = 'desk-cam-' + Date.now() + '.jpg';
@@ -139,28 +176,38 @@ async function screenshot() {
 
 function showToast() {
   const t = document.getElementById('save-toast');
-  t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000);
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
 }
 
+// ── 重置 ───────────────────────────────────────────────
 async function resetAll() {
-  if (streaming) stopStream();
-  await setConfig({rotate: 0, hmirror: 0, vflip: 0});
+  rotate = 0; hmirror = 0; vflip = 0;
+  applyTransform();
+  await saveOrientation();
+}
+
+// ── UI 辅助 ────────────────────────────────────────────
+function setStatus(dot, text) {
+  document.getElementById('status-dot').className = dot;
+  document.getElementById('status-text').textContent = text;
 }
 
 function updateButtons() {
   document.getElementById('btn-hmirror').classList.toggle('active', hmirror === 1);
-  document.getElementById('btn-vflip').classList.toggle('active', vflip === 1);
+  document.getElementById('btn-vflip').classList.toggle('active',   vflip   === 1);
 }
 
 function updateOrientationText() {
   const parts = [];
   if (rotate)  parts.push('旋转 ' + rotate + '°');
-  if (hmirror) parts.push('水平镜像');
+  if (hmirror) parts.push('镜像');
   if (vflip)   parts.push('上下翻转');
   document.getElementById('orientation-text').textContent =
     parts.length ? '· ' + parts.join(' · ') : '';
 }
 
+// ── 启动：从服务器读取已保存的参数 ───────────────────────
 async function init() {
   try {
     const res  = await fetch(API + '/stream/config');
@@ -168,7 +215,7 @@ async function init() {
     rotate  = data.rotate  ?? 0;
     hmirror = data.hmirror ?? 0;
     vflip   = data.vflip   ?? 0;
-    updateButtons(); updateOrientationText();
+    applyTransform();
     setStatus('on', '推理服务在线 · 点击连接开始预览');
   } catch(e) {
     setStatus('off', '推理服务离线');
