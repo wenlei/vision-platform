@@ -49,7 +49,7 @@ app.include_router(stream_router)
 _BASE = Path(__file__).parent.parent
 UI_DIR = _BASE / "UI"
 if UI_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(UI_DIR)), name="static")
+    app.mount("/ui", StaticFiles(directory=str(UI_DIR)), name="ui")
     log.info("Static files mounted at /ui from %s", UI_DIR)
 
 log.info("Vision Inference Service ready")
