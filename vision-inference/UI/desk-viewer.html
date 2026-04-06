@@ -54,7 +54,6 @@ button#btn-connect { min-width:72px; }
 <div id="save-toast">截图已保存</div>
 <script>
 const API = '';
-const ESP32 = 'http://192.168.50.87';
 const img = document.getElementById('stream');
 const ph  = document.getElementById('placeholder');
 let rotate = 0, vflip = 0, hmirror = 0, streaming = false;
@@ -70,12 +69,9 @@ function startStream() {
   streaming = true;
   img.style.display = 'block';
   ph.style.display = 'none';
-  // 移除旧 onerror，MJPEG 流不适合用 img.onerror 判断失败
-  img.onload = null;
+  // 完全断开再重连，确保新配置生效
   img.src = '';
-  setTimeout(() => {
-    img.src = API + '/stream?t=' + Date.now();
-  }, 100);
+  setTimeout(() => { img.src = API + '/stream?t=' + Date.now(); }, 300);
   document.getElementById('btn-connect').textContent = '断开';
   document.getElementById('btn-connect').classList.add('active');
   setStatus('on', '流连接中…');
@@ -92,47 +88,46 @@ function stopStream() {
   setStatus('', '已断开');
 }
 
-async function setRotate(deg) {
-  deg = ((deg % 360) + 360) % 360;
+// 所有方向控制统一走 POST /stream/config
+async function setConfig(params) {
   try {
     const res = await fetch(API + '/stream/config', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({rotate: deg})
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(params)
     });
     const data = await res.json();
-    rotate = data.updated?.rotate ?? deg;
+    if (data.updated) {
+      if (data.updated.rotate  !== undefined) rotate  = data.updated.rotate;
+      if (data.updated.hmirror !== undefined) hmirror = data.updated.hmirror;
+      if (data.updated.vflip   !== undefined) vflip   = data.updated.vflip;
+    }
+    updateButtons();
     updateOrientationText();
+    // 重连流以应用新配置
     if (streaming) startStream();
-  } catch(e) { alert('旋转失败：' + e.message); }
+  } catch(e) { alert('配置失败：' + e.message); }
 }
 
-function rotateCW()  { setRotate(rotate + 90); }
-function rotateCCW() { setRotate(rotate - 90); }
-
-async function sendESP32Config(params) {
-  try {
-    const res = await fetch(API + '/stream/camera/config?' + params, {method:'POST'});
-    const data = await res.json();
-    vflip = data.vflip; hmirror = data.hmirror;
-    updateButtons(); updateOrientationText();
-    if (streaming) startStream();
-  } catch(e) { alert('固件配置失败：' + e.message); }
-}
-function toggleMirror() { sendESP32Config('hmirror=' + (hmirror ? 0 : 1)); }
-function toggleVFlip()  { sendESP32Config('vflip='   + (vflip   ? 0 : 1)); }
+function rotateCW()      { setConfig({rotate: ((rotate + 90)  % 360 + 360) % 360}); }
+function rotateCCW()     { setConfig({rotate: ((rotate - 90)  % 360 + 360) % 360}); }
+function toggleMirror()  { setConfig({hmirror: hmirror ? 0 : 1}); }
+function toggleVFlip()   { setConfig({vflip:   vflip   ? 0 : 1}); }
 
 async function screenshot() {
   try {
-    const res = await fetch(ESP32 + '/capture');
+    const res  = await fetch('http://192.168.50.87/capture');
     const blob = await res.blob();
-    const bmp = await createImageBitmap(blob);
+    const bmp  = await createImageBitmap(blob);
     const w = bmp.width, h = bmp.height, rad = rotate * Math.PI / 180;
     const canvas = document.createElement('canvas');
-    const rot90 = (rotate === 90 || rotate === 270);
-    canvas.width = rot90 ? h : w; canvas.height = rot90 ? w : h;
+    const rot90  = (rotate === 90 || rotate === 270);
+    canvas.width  = rot90 ? h : w;
+    canvas.height = rot90 ? w : h;
     const ctx = canvas.getContext('2d');
     ctx.translate(canvas.width/2, canvas.height/2);
-    ctx.rotate(rad); ctx.drawImage(bmp, -w/2, -h/2);
+    ctx.rotate(rad);
+    ctx.drawImage(bmp, -w/2, -h/2);
     canvas.toBlob(b => {
       const a = document.createElement('a');
       a.download = 'desk-cam-' + Date.now() + '.jpg';
@@ -141,36 +136,45 @@ async function screenshot() {
     }, 'image/jpeg', 0.92);
   } catch(e) { alert('截屏失败：' + e.message); }
 }
+
 function showToast() {
   const t = document.getElementById('save-toast');
   t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000);
 }
+
 async function resetAll() {
   if (streaming) stopStream();
-  await setRotate(0); await sendESP32Config('vflip=0&hmirror=0');
+  await setConfig({rotate: 0, hmirror: 0, vflip: 0});
 }
+
 function updateButtons() {
   document.getElementById('btn-hmirror').classList.toggle('active', hmirror === 1);
   document.getElementById('btn-vflip').classList.toggle('active', vflip === 1);
 }
+
 function updateOrientationText() {
   const parts = [];
   if (rotate)  parts.push('旋转 ' + rotate + '°');
   if (hmirror) parts.push('水平镜像');
   if (vflip)   parts.push('上下翻转');
-  document.getElementById('orientation-text').textContent = parts.length ? '· ' + parts.join(' · ') : '';
+  document.getElementById('orientation-text').textContent =
+    parts.length ? '· ' + parts.join(' · ') : '';
 }
+
 async function init() {
   try {
-    const res = await fetch(API + '/stream/config');
+    const res  = await fetch(API + '/stream/config');
     const data = await res.json();
-    rotate = data.rotate ?? 0; vflip = data.vflip ?? 0; hmirror = data.hmirror ?? 0;
+    rotate  = data.rotate  ?? 0;
+    hmirror = data.hmirror ?? 0;
+    vflip   = data.vflip   ?? 0;
     updateButtons(); updateOrientationText();
     setStatus('on', '推理服务在线 · 点击连接开始预览');
   } catch(e) {
     setStatus('off', '推理服务离线');
   }
 }
+
 init();
 </script>
 </body>
