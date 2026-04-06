@@ -822,21 +822,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); }
 
 <!-- ── JavaScript ───────────────────────────────────────────── -->
 <script>
-// ── 全局配置 ─────────────────────────────────────────────────
-let API  = localStorage.getItem('vision_api') || 'http://192.168.50.71:8000';
-let CAM  = localStorage.getItem('vision_cam') || 'http://192.168.50.87';
+// ── 全局配置 ──────────────────────────────────────────────────
+let API = localStorage.getItem('vision_api') || 'http://192.168.50.71:8000';
+let CAM = localStorage.getItem('vision_cam') || 'http://192.168.50.87';
 
-// ── 导航 ─────────────────────────────────────────────────────
+// ── 导航 ──────────────────────────────────────────────────────
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     item.classList.add('active');
     const page = document.getElementById('page-' + item.dataset.page);
-    if (page) {
-      page.classList.add('active');
-      onPageLoad(item.dataset.page);
-    }
+    if (page) { page.classList.add('active'); onPageLoad(item.dataset.page); }
   });
 });
 
@@ -848,24 +845,21 @@ function onPageLoad(name) {
   if (name === 'system')  loadHealth();
 }
 
-// ── Toast ────────────────────────────────────────────────────
+// ── Toast ─────────────────────────────────────────────────────
 function toast(msg, type = 'ok', ms = 2500) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'show ' + type;
+  t.textContent = msg; t.className = 'show ' + type;
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), ms);
 }
 
-// ── 健康检查 ─────────────────────────────────────────────────
+// ── 健康检查 ──────────────────────────────────────────────────
 async function checkHealth() {
   try {
     const r = await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
     const d = await r.json();
-    const dot = document.getElementById('health-dot');
-    const lbl = document.getElementById('health-label');
-    dot.className = 'status-dot online';
-    lbl.textContent = d.cuda ? 'GPU ' + (d.device || '').split(' ').pop() : 'CPU';
+    document.getElementById('health-dot').className = 'status-dot online';
+    document.getElementById('health-label').textContent = d.cuda ? 'GPU ' + (d.device || '').split(' ').pop() : 'CPU';
     return d;
   } catch {
     document.getElementById('health-dot').className = 'status-dot offline';
@@ -877,19 +871,16 @@ setInterval(checkHealth, 10000);
 checkHealth();
 
 // ══════════════════════════════════════════════════════════════
+// LIVE 页
+// 架构：ESP32 → stream_proxy(原始转发) → 浏览器(CSS transform)
 // ══════════════════════════════════════════════════════════════
-// LIVE 页 — 方向全部 CSS transform，不操作 ESP32 传感器
-// 架构：ESP32 原始流 → stream_proxy(转发) → 浏览器 CSS transform
-// ══════════════════════════════════════════════════════════════
-let cssDeg  = 0;   // CSS 旋转角度
-let hmirror = 0;   // CSS 水平镜像
-let vflip   = 0;   // CSS 垂直翻转
-
 let streaming = false;
+let cssDeg    = 0;
+let hmirror   = 0;
+let vflip     = 0;
 
-function toggleStream() {
-  streaming ? stopStream() : startStream();
-}
+// 连接 / 断开
+function toggleStream() { streaming ? stopStream() : startStream(); }
 
 function startStream() {
   streaming = true;
@@ -899,15 +890,15 @@ function startStream() {
   document.getElementById('stream-offline').style.display = 'none';
   document.getElementById('btn-connect').textContent = '断开';
   document.getElementById('btn-connect').classList.add('primary');
-  document.getElementById('live-status').textContent = '连接中…';
-  document.getElementById('live-status').className = 'badge amber';
+  document.getElementById('live-status').textContent = 'LIVE';
+  document.getElementById('live-status').className = 'badge green';
+  applyOrientation();
 }
 
 function stopStream() {
   streaming = false;
   const img = document.getElementById('stream-img');
-  img.src = '';
-  img.style.display = 'none';
+  img.src = ''; img.style.display = 'none';
   document.getElementById('stream-offline').style.display = 'flex';
   document.getElementById('stream-offline').innerHTML = '<div class="icon">📷</div><span>点击「连接」开始预览</span>';
   document.getElementById('btn-connect').textContent = '连接';
@@ -928,95 +919,19 @@ function onStreamError() {
   document.getElementById('live-status').className = 'badge red';
 }
 
-let streaming = false;
-
-function toggleStream() {
-  streaming ? stopStream() : startStream();
-}
-
-function startStream() {
-  streaming = true;
-  const img = document.getElementById('stream-img');
-  img.src = API + '/stream?t=' + Date.now();
-  img.style.display = 'block';
-  document.getElementById('stream-offline').style.display = 'none';
-  document.getElementById('btn-connect').textContent = '断开';
-  document.getElementById('btn-connect').classList.add('primary');
-  document.getElementById('live-status').textContent = '连接中…';
-  document.getElementById('live-status').className = 'badge amber';
-}
-
-function stopStream() {
-  streaming = false;
-  const img = document.getElementById('stream-img');
-  img.src = '';
-  img.style.display = 'none';
-  document.getElementById('stream-offline').style.display = 'flex';
-  document.getElementById('stream-offline').innerHTML = '<div class="icon">📷</div><span>点击「连接」开始预览</span>';
-  document.getElementById('btn-connect').textContent = '连接';
-  document.getElementById('btn-connect').classList.remove('primary');
-  document.getElementById('live-status').textContent = '未连接';
-  document.getElementById('live-status').className = 'badge amber';
-}
-
-function onStreamError() {
-  streaming = false;
-  const img = document.getElementById('stream-img');
-  img.style.display = 'none';
-  document.getElementById('stream-offline').style.display = 'flex';
-  document.getElementById('stream-offline').innerHTML = '<div class="icon">📷</div>摄像头离线<br><span style="color:var(--text3);font-size:11px">请检查 ESP32</span>';
-  document.getElementById('btn-connect').textContent = '连接';
-  document.getElementById('btn-connect').classList.remove('primary');
-  document.getElementById('live-status').textContent = '离线';
-  document.getElementById('live-status').className = 'badge red';
-}
-
-function initStream() {
-  const img = document.getElementById('stream-img');
-  // 从 stream_proxy 读取已保存的方向参数
-  fetch(API + '/stream/config').then(r => r.json()).then(d => {
-    cssDeg  = d.rotate  || 0;
-    hmirror = d.hmirror || 0;
-    vflip   = d.vflip   || 0;
-    applyOrientation();
-    updateOrientBtns();
-  }).catch(() => {});
-  // 不自动连流，等用户点「连接」按钮
-}
-
-function onStreamError() {
-  document.getElementById('stream-img').style.display = 'none';
-  document.getElementById('stream-offline').style.display = 'flex';
-  document.getElementById('live-status').textContent = '离线';
-  document.getElementById('live-status').className = 'badge red';
-}
-
-// CSS transform：直接修改 img style，不重连流，不操作 ESP32
+// 方向控制（CSS transform，不重连流，不操作 ESP32）
 function applyOrientation() {
   const img = document.getElementById('stream-img');
   let t = '';
   if (hmirror) t += 'scaleX(-1) ';
   if (vflip)   t += 'scaleY(-1) ';
-  if (cssDeg)  t += `rotate(${cssDeg}deg) `;
+  if (cssDeg)  t += 'rotate(' + cssDeg + 'deg) ';
   img.style.transform = t.trim() || 'none';
-  img.style.display = 'block';
 }
 
 function updateOrientBtns() {
   document.getElementById('btn-mirror').classList.toggle('primary', hmirror === 1);
   document.getElementById('btn-vflip').classList.toggle('primary', vflip === 1);
-  const dm = document.getElementById('dev-mirror-btn');
-  const dv = document.getElementById('dev-vflip-btn');
-  if (dm) dm.classList.toggle('primary', hmirror === 1);
-  if (dv) dv.classList.toggle('primary', vflip === 1);
-  const ds = document.getElementById('dev-orient-status');
-  if (ds) {
-    const parts = [];
-    if (hmirror) parts.push('水平镜像');
-    if (vflip)   parts.push('上下翻转');
-    if (cssDeg)  parts.push(`旋转${cssDeg}°`);
-    ds.textContent = parts.length ? parts.join(' · ') : '默认方向';
-  }
 }
 
 function rotateCW()     { cssDeg = (cssDeg + 90)       % 360; applyOrientation(); updateOrientBtns(); }
@@ -1024,23 +939,39 @@ function rotateCCW()    { cssDeg = (cssDeg - 90 + 360) % 360; applyOrientation()
 function toggleMirror() { hmirror = hmirror ? 0 : 1; applyOrientation(); updateOrientBtns(); }
 function toggleVFlip()  { vflip   = vflip   ? 0 : 1; applyOrientation(); updateOrientBtns(); }
 
-// 「完成」按钮：把当前参数保存到后端 yaml
+// 💾 保存方向：把 rotate/hmirror/vflip 存到后端 yaml，供 capture 使用
 async function saveOrientation() {
   try {
-    await fetch(API + '/stream/config', {
+    const res = await fetch(API + '/stream/config', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({rotate: cssDeg, hmirror, vflip})
+      body: JSON.stringify({ rotate: cssDeg, hmirror, vflip })
     });
-    toast('✅ 方向参数已保存', 'ok');
+    const d = await res.json();
+    toast('💾 方向参数已保存（rotate:' + cssDeg + '° hmirror:' + hmirror + ' vflip:' + vflip + '）', 'ok');
   } catch(e) { toast('保存失败: ' + e.message, 'err'); }
 }
 
 async function resetOrientation() {
   cssDeg = 0; hmirror = 0; vflip = 0;
-  applyOrientation();
-  updateOrientBtns();
+  applyOrientation(); updateOrientBtns();
   await saveOrientation();
+}
+
+// 页面加载时读取已保存的方向参数（不自动连流）
+function initStream() {
+  fetch(API + '/stream/config').then(r => r.json()).then(d => {
+    cssDeg  = d.rotate  || 0;
+    hmirror = d.hmirror || 0;
+    vflip   = d.vflip   || 0;
+    applyOrientation();
+    updateOrientBtns();
+  }).catch(() => {});
+  // 显示待连接状态
+  document.getElementById('stream-offline').style.display = 'flex';
+  document.getElementById('stream-offline').innerHTML = '<div class="icon">📷</div><span>点击「连接」开始预览</span>';
+  document.getElementById('live-status').textContent = '未连接';
+  document.getElementById('live-status').className = 'badge amber';
 }
 
 // 检测
@@ -1048,303 +979,217 @@ async function triggerDetect() {
   const result = document.getElementById('detect-result');
   result.innerHTML = '<span style="color:var(--text3)">拍照中...</span>';
   try {
-    // 从摄像头抓一帧
     const capR = await fetch(CAM + '/capture');
     const blob = await capR.blob();
-    // 发到推理服务
-    const fd = new FormData();
+    const fd   = new FormData();
     fd.append('file', blob, 'capture.jpg');
-    const detectR = await fetch(API + '/describe', { method: 'POST', body: fd });
-    const data = await detectR.json();
-    result.innerHTML = '';
-    if (data.description && data.description !== 'No objects detected') {
-      const tags = (data.description.replace('Detected: ', '')).split(', ');
-      tags.forEach(t => {
-        const span = document.createElement('span');
-        span.className = 'detect-tag';
-        span.textContent = t.trim();
-        result.appendChild(span);
-      });
+    fd.append('save_image', 'true');
+    result.innerHTML = '<span style="color:var(--text3)">识别中...</span>';
+    const detR = await fetch(API + '/detect', { method: 'POST', body: fd });
+    const det  = await detR.json();
+    if (det.detections && det.detections.length > 0) {
+      result.innerHTML = det.detections
+        .map(d => '<span class="detect-tag">' + d.label + ' ' + Math.round(d.confidence * 100) + '%</span>')
+        .join('');
     } else {
       result.innerHTML = '<span style="color:var(--text3)">未检测到物体</span>';
     }
-  } catch(e) {
-    result.innerHTML = '<span style="color:var(--red)">检测失败：' + e.message + '</span>';
-  }
+  } catch(e) { result.innerHTML = '<span style="color:var(--red)">错误: ' + e.message + '</span>'; }
 }
 
-// 人脸识别
+// 截屏：从 ESP32 拿原始帧，按当前参数处理后保存
+async function screenshot() {
+  try {
+    const res  = await fetch(CAM + '/capture');
+    const blob = await res.blob();
+    const bmp  = await createImageBitmap(blob);
+    const w = bmp.width, h = bmp.height;
+    const rot90 = (cssDeg === 90 || cssDeg === 270);
+    const cv = document.createElement('canvas');
+    cv.width  = rot90 ? h : w; cv.height = rot90 ? w : h;
+    const ctx = cv.getContext('2d');
+    ctx.translate(cv.width/2, cv.height/2);
+    if (hmirror) ctx.scale(-1, 1);
+    if (vflip)   ctx.scale(1, -1);
+    ctx.rotate(cssDeg * Math.PI / 180);
+    ctx.drawImage(bmp, -w/2, -h/2);
+    cv.toBlob(b => {
+      const a = document.createElement('a');
+      a.download = 'desk-cam-' + Date.now() + '.jpg';
+      a.href = URL.createObjectURL(b); a.click();
+      URL.revokeObjectURL(a.href); toast('截图已保存', 'ok');
+    }, 'image/jpeg', 0.92);
+  } catch(e) { toast('截屏失败: ' + e.message, 'err'); }
+}
+
 async function triggerFaceIdentify() {
   const result = document.getElementById('face-result');
   result.textContent = '识别中...';
   try {
     const capR = await fetch(CAM + '/capture');
     const blob = await capR.blob();
-    const fd = new FormData();
+    const fd   = new FormData();
     fd.append('file', blob, 'capture.jpg');
     const r = await fetch(API + '/face/identify', { method: 'POST', body: fd });
-    const data = await r.json();
-    if (!data.results || data.results.length === 0) {
-      result.textContent = '未检测到人脸';
-    } else {
-      result.innerHTML = data.results.map(f => {
-        const conf = f.confidence === 'high' ? 'green' : f.matched ? 'amber' : 'text3';
-        const learned = f.learned ? ' <span style="color:var(--amber)">↑学习</span>' : '';
-        return `<div style="color:var(--${conf})">${f.name} ${(f.similarity*100).toFixed(0)}%${learned}</div>`;
-      }).join('');
-    }
-  } catch(e) { result.textContent = '识别失败: ' + e.message; }
+    const d = await r.json();
+    result.textContent = d.name ? d.name + ' (' + Math.round((d.similarity||0)*100) + '%)' : '未识别';
+  } catch(e) { result.textContent = '错误: ' + e.message; }
 }
 
-// 截屏
-async function screenshot() {
-  try {
-    const r = await fetch(CAM + '/capture');
-    const blob = await r.blob();
-    const bmp = await createImageBitmap(blob);
-    const w = bmp.width, h = bmp.height;
-    const rad = cssDeg * Math.PI / 180;
-    const canvas = document.createElement('canvas');
-    const rotated = cssDeg === 90 || cssDeg === 270;
-    canvas.width  = rotated ? h : w;
-    canvas.height = rotated ? w : h;
-    const ctx = canvas.getContext('2d');
-    ctx.translate(canvas.width/2, canvas.height/2);
-    ctx.rotate(rad);
-    ctx.drawImage(bmp, -w/2, -h/2);
-    canvas.toBlob(b => {
-      const a = document.createElement('a');
-      a.download = `desk-${Date.now()}.jpg`;
-      a.href = URL.createObjectURL(b);
-      a.click();
-      URL.revokeObjectURL(a.href);
-      toast('截图已保存', 'ok');
-    }, 'image/jpeg', 0.92);
-  } catch { toast('截屏失败，请检查摄像头', 'err'); }
-}
-
-initStream();
-
 // ══════════════════════════════════════════════════════════════
-// HISTORY 页
+// HISTORY
 // ══════════════════════════════════════════════════════════════
-async function loadHistory() {
+async function loadHistory(label = '') {
   const grid = document.getElementById('history-grid');
   grid.innerHTML = '<span style="color:var(--text3)">加载中...</span>';
   try {
-    // 拉取最近50条
-    const r = await fetch(API + '/search?label=person&limit=50');
-    const data = await r.json();
-    renderHistoryGrid(data.results || []);
-  } catch { grid.innerHTML = '<span style="color:var(--red)">加载失败</span>'; }
+    const url = label ? API + '/search?query=' + encodeURIComponent(label) + '&limit=50' : API + '/search?query=&limit=50';
+    const r   = await fetch(url);
+    const d   = await r.json();
+    const items = d.results || d.detections || d || [];
+    if (!items.length) { grid.innerHTML = '<span style="color:var(--text3)">暂无记录</span>'; return; }
+    grid.innerHTML = items.map(item => {
+      const tags = (item.labels || item.detections || []).map(l =>
+        '<span class="history-tag">' + (l.label || l) + '</span>').join('');
+      const time = item.timestamp ? new Date(item.timestamp).toLocaleString('zh-CN') : '';
+      const thumb = item.image_url || item.image_path || '';
+      return '<div class="history-card">'
+        + (thumb ? '<img class="history-thumb" src="' + API + '/' + thumb + '" onerror="this.style.display='none'">' : '')
+        + '<div class="history-info"><div class="history-time">' + time + '</div>'
+        + '<div class="history-tags">' + tags + '</div></div></div>';
+    }).join('');
+  } catch(e) { grid.innerHTML = '<span style="color:var(--red)">加载失败: ' + e.message + '</span>'; }
 }
 
-async function searchHistory() {
-  const label = document.getElementById('search-label').value.trim();
-  if (!label) return loadHistory();
-  const grid = document.getElementById('history-grid');
-  grid.innerHTML = '<span style="color:var(--text3)">搜索中...</span>';
-  try {
-    const r = await fetch(`${API}/search?label=${encodeURIComponent(label)}&limit=50`);
-    const data = await r.json();
-    renderHistoryGrid(data.results || []);
-  } catch { grid.innerHTML = '<span style="color:var(--red)">搜索失败</span>'; }
-}
-
-function renderHistoryGrid(results) {
-  const grid = document.getElementById('history-grid');
-  if (!results.length) {
-    grid.innerHTML = '<span style="color:var(--text3)">暂无记录</span>';
-    return;
-  }
-  grid.innerHTML = '';
-  results.forEach(r => {
-    const card = document.createElement('div');
-    card.className = 'history-card';
-    const time = new Date(r.captured_at).toLocaleString('zh-CN', { hour12: false });
-    const tags = (r.labels || []).slice(0, 4);
-    card.innerHTML = `
-      <div class="history-info">
-        <div class="history-time">${time}</div>
-        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${r.device_name || r.camera_ip || '未知设备'}</div>
-        <div class="history-tags">
-          ${tags.map(t => `<span class="history-tag">${t}</span>`).join('')}
-        </div>
-        ${r.description ? `<div style="font-size:10px;color:var(--text3);margin-top:4px">${r.description}</div>` : ''}
-      </div>`;
-    grid.appendChild(card);
-  });
+function searchHistory() {
+  loadHistory(document.getElementById('search-label').value.trim());
 }
 
 // ══════════════════════════════════════════════════════════════
-// ITEMS 页
+// ITEMS
 // ══════════════════════════════════════════════════════════════
 async function loadItems() {
   try {
     const r = await fetch(API + '/items');
-    const data = await r.json();
-    const items = data.items || [];
-    document.getElementById('items-count').textContent = `(${items.length})`;
-    const tbody = document.getElementById('items-tbody');
-    tbody.innerHTML = items.length ? items.map(it => `
-      <tr>
-        <td>${it.label}</td>
-        <td><span class="badge blue">${it.sample_count}</span></td>
-        <td>${new Date(it.registered_at).toLocaleDateString('zh-CN')}</td>
-      </tr>`).join('') : '<tr><td colspan="3" style="color:var(--text3)">暂无注册物品</td></tr>';
-  } catch { document.getElementById('items-tbody').innerHTML = '<tr><td colspan="3" style="color:var(--red)">加载失败</td></tr>'; }
+    const d = await r.json();
+    const items = d.items || d || [];
+    document.getElementById('items-count').textContent = '(' + items.length + ')';
+    document.getElementById('items-tbody').innerHTML = items.length
+      ? items.map(it => '<tr><td>' + it.label + '</td><td>' + (it.sample_count||1) + '</td><td>' + (it.created_at||'').slice(0,10) + '</td></tr>').join('')
+      : '<tr><td colspan="3" style="color:var(--text3)">暂无注册物品</td></tr>';
+  } catch(e) { document.getElementById('items-tbody').innerHTML = '<tr><td colspan="3" style="color:var(--red)">加载失败</td></tr>'; }
+}
+
+function previewFile(input, previewId) {
+  const f = input.files[0];
+  if (!f) return;
+  const img = document.getElementById(previewId);
+  img.src = URL.createObjectURL(f); img.style.display = 'block';
 }
 
 async function registerItem() {
   const file  = document.getElementById('item-file').files[0];
   const label = document.getElementById('item-label').value.trim();
-  const desc  = document.getElementById('item-desc').value.trim();
-  if (!file || !label) { toast('请选择图片并填写物品名称', 'err'); return; }
+  if (!file || !label) { toast('请选择图片并填写名称', 'err'); return; }
   const fd = new FormData();
-  fd.append('file', file);
-  fd.append('label', label);
-  if (desc) fd.append('description', desc);
+  fd.append('file', file); fd.append('label', label);
   try {
     const r = await fetch(API + '/register', { method: 'POST', body: fd });
-    const data = await r.json();
-    toast(data.message || '注册成功', 'ok');
-    loadItems();
-  } catch { toast('注册失败', 'err'); }
-}
-
-function previewFile(input, previewId) {
-  const preview = document.getElementById(previewId);
-  if (input.files[0]) {
-    preview.src = URL.createObjectURL(input.files[0]);
-    preview.style.display = 'block';
-  }
+    const d = await r.json();
+    toast('✅ 已注册: ' + label, 'ok'); loadItems();
+  } catch(e) { toast('注册失败: ' + e.message, 'err'); }
 }
 
 // ══════════════════════════════════════════════════════════════
-// FACES 页
+// FACES
 // ══════════════════════════════════════════════════════════════
 async function loadFaces() {
   try {
     const r = await fetch(API + '/faces');
-    const data = await r.json();
-    const faces = data.faces || [];
-    document.getElementById('faces-count').textContent = `(${faces.length})`;
-    const tbody = document.getElementById('faces-tbody');
-    tbody.innerHTML = faces.length ? faces.map(f => `
-      <tr>
-        <td style="font-weight:700">${f.name}</td>
-        <td><span class="badge blue">${f.sample_count || 1}</span></td>
-        <td>${f.det_score ? (f.det_score * 100).toFixed(0) + '%' : '-'}</td>
-        <td>${new Date(f.registered_at).toLocaleDateString('zh-CN')}</td>
-      </tr>`).join('') : '<tr><td colspan="4" style="color:var(--text3)">暂无注册人脸</td></tr>';
-  } catch { document.getElementById('faces-tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red)">加载失败</td></tr>'; }
+    const d = await r.json();
+    const faces = d.faces || d || [];
+    document.getElementById('faces-count').textContent = '(' + faces.length + ')';
+    document.getElementById('faces-tbody').innerHTML = faces.length
+      ? faces.map(f => '<tr><td>' + f.name + '</td><td>' + (f.sample_count||1) + '</td><td>' + Math.round((f.avg_confidence||0)*100) + '%</td><td>' + (f.created_at||'').slice(0,10) + '</td></tr>').join('')
+      : '<tr><td colspan="4" style="color:var(--text3)">暂无注册人脸</td></tr>';
+  } catch(e) { document.getElementById('faces-tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red)">加载失败</td></tr>'; }
 }
 
 async function registerFace() {
   const file = document.getElementById('face-file').files[0];
   const name = document.getElementById('face-name').value.trim();
-  const result = document.getElementById('face-register-result');
   if (!file || !name) { toast('请选择图片并填写姓名', 'err'); return; }
-  result.textContent = '注册中...';
   const fd = new FormData();
-  fd.append('file', file);
-  fd.append('name', name);
+  fd.append('file', file); fd.append('name', name);
+  const res = document.getElementById('face-register-result');
+  res.textContent = '注册中...';
   try {
     const r = await fetch(API + '/face/register', { method: 'POST', body: fd });
-    const data = await r.json();
-    if (data.status === 'ok') {
-      toast(data.message, 'ok');
-      result.innerHTML = `<span style="color:var(--green)">✓ ${data.message}</span>`;
-      loadFaces();
-    } else {
-      result.innerHTML = `<span style="color:var(--red)">✗ ${data.error}</span>`;
-    }
-  } catch(e) { result.innerHTML = `<span style="color:var(--red)">✗ ${e.message}</span>`; }
+    const d = await r.json();
+    res.textContent = '✅ 已注册: ' + name;
+    toast('✅ 人脸注册成功', 'ok'); loadFaces();
+  } catch(e) { res.textContent = '❌ 注册失败: ' + e.message; }
 }
 
 // ══════════════════════════════════════════════════════════════
-// DEVICES 页
+// DEVICES
 // ══════════════════════════════════════════════════════════════
 function initDevices() {
   const list = document.getElementById('devices-list');
-  const devices = [
-    { name: 'desk-cam-01', ip: CAM.replace('http://',''), role: '摄像头端点', icon: '📷', type: 'esp32' },
-    { name: 'Alchemy Furnace', ip: API.replace('http://','').split(':')[0], role: 'GPU 推理服务', icon: '🖥️', type: 'furnace' },
-    { name: 'PostgreSQL LXC', ip: '192.168.50.118', role: '数据库', icon: '🗄️', type: 'db' },
-  ];
-  list.innerHTML = devices.map(d => `
-    <div class="device-card" id="dcard-${d.type}">
-      <div class="device-icon">${d.icon}</div>
+  list.innerHTML = `
+    <div class="device-card">
+      <div class="device-icon">📷</div>
       <div>
-        <div class="device-name">${d.name}</div>
-        <div class="device-meta">${d.ip} · ${d.role}</div>
+        <div class="device-name">desk-cam-01</div>
+        <div class="device-meta">${CAM} · study-desk · E8:F6:0A:8C:F4:44</div>
       </div>
-      <span class="badge amber" id="dstatus-${d.type}">检测中</span>
-    </div>`).join('');
+      <span class="badge" id="dev-status">检测中</span>
+    </div>`;
   pingDevices();
-  updateOrientBtns();
 }
 
 async function pingDevices() {
-  // Ping 推理服务
+  const badge = document.getElementById('dev-status');
+  if (!badge) return;
   try {
-    await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
-    setDevStatus('furnace', 'online');
-  } catch { setDevStatus('furnace', 'offline'); }
-  // Ping ESP32
-  try {
-    await fetch(CAM + '/status', { signal: AbortSignal.timeout(3000) });
-    setDevStatus('esp32', 'online');
-  } catch { setDevStatus('esp32', 'offline'); }
-  // DB 通过 health 接口间接判断
-  setDevStatus('db', 'online');
-}
-
-function setDevStatus(type, status) {
-  const el = document.getElementById('dstatus-' + type);
-  if (!el) return;
-  if (status === 'online') { el.textContent = '在线'; el.className = 'badge green'; }
-  else { el.textContent = '离线'; el.className = 'badge red'; }
-}
-
-// ══════════════════════════════════════════════════════════════
-// SYSTEM 页
-// ══════════════════════════════════════════════════════════════
-async function loadHealth() {
-  const grid = document.getElementById('health-grid');
-  const cfg  = document.getElementById('config-display');
-  try {
-    const r = await fetch(API + '/health');
+    const r = await fetch(CAM + '/status', { signal: AbortSignal.timeout(3000) });
     const d = await r.json();
-    grid.innerHTML = [
-      ['状态',    d.status === 'ok' ? '✓ 正常' : '✗ 异常'],
-      ['设备',    d.device || 'CPU'],
-      ['CUDA',    d.cuda ? '✓ 启用' : '✗ 关闭'],
-      ['存储模式', d.image_storage || '-'],
-      ['人脸阈值', `${d.face_threshold?.high || 0.75} / ${d.face_threshold?.low || 0.40}`],
-      ['图像旋转', d.image_rotate + '°'],
-    ].map(([k,v]) => `
-      <div class="health-item">
-        <div class="health-key">${k}</div>
-        <div class="health-val" style="color:${v.startsWith('✓') ? 'var(--green)' : v.startsWith('✗') ? 'var(--red)' : 'var(--text)'}">${v}</div>
-      </div>`).join('');
-
-    cfg.innerHTML = [
-      ['IMAGE_STORAGE',   d.image_storage],
-      ['IMAGE_DIR',       d.image_dir],
-      ['IMAGE_ROTATE',    d.image_rotate + '°'],
-      ['IMAGE_FLIP',      d.image_flip],
-      ['FACE_HIGH',       d.face_threshold?.high],
-      ['FACE_LOW',        d.face_threshold?.low],
-    ].map(([k,v]) => `<div><span style="color:var(--green)">${k}</span>: <span style="color:var(--text2)">${v || '-'}</span></div>`).join('');
+    badge.textContent = 'RSSI ' + d.rssi;
+    badge.className = 'badge green';
   } catch {
-    grid.innerHTML = '<span style="color:var(--red)">推理服务离线</span>';
-    cfg.innerHTML  = '<span style="color:var(--text3)">无法获取配置</span>';
+    badge.textContent = '离线';
+    badge.className = 'badge red';
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// SYSTEM
+// ══════════════════════════════════════════════════════════════
+async function loadHealth() {
+  const grid = document.getElementById('health-grid');
+  const conf = document.getElementById('config-display');
+  try {
+    const r = await fetch(API + '/health');
+    const d = await r.json();
+    grid.innerHTML = Object.entries(d).map(([k,v]) =>
+      '<div class="health-item"><div class="health-key">' + k + '</div><div class="health-val">' + v + '</div></div>'
+    ).join('');
+  } catch(e) { grid.innerHTML = '<span style="color:var(--red)">加载失败</span>'; }
+  try {
+    const r2 = await fetch(API + '/stream/config');
+    const d2 = await r2.json();
+    conf.innerHTML = Object.entries(d2).map(([k,v]) =>
+      '<div style="padding:3px 0"><span style="color:var(--green)">' + k + '</span>: ' + v + '</div>'
+    ).join('');
+  } catch {}
+}
+
 async function triggerCleanup() {
-  toast('Cleanup 功能需在服务端配置自动调度', 'ok', 3000);
+  try {
+    const r = await fetch(API + '/cleanup', { method: 'POST' });
+    const d = await r.json();
+    toast('✅ Cleanup 完成', 'ok'); loadHealth();
+  } catch(e) { toast('Cleanup 失败: ' + e.message, 'err'); }
 }
 
 function saveApiConfig() {
@@ -1352,42 +1197,15 @@ function saveApiConfig() {
   CAM = document.getElementById('cfg-cam').value.trim();
   localStorage.setItem('vision_api', API);
   localStorage.setItem('vision_cam', CAM);
-  toast('配置已保存，重新连接中...', 'ok');
-  checkHealth();
+  toast('✅ API 地址已保存', 'ok');
 }
 
-function restartStream() {
-  const img = document.getElementById('stream-img');
-  img.src = CAM + ':81/?' + Date.now();
-  toast('重新连接视频流...', 'ok');
-}
+function restartStream() { if (streaming) { stopStream(); setTimeout(startStream, 500); } }
 
-// 拖拽上传
-['item-drop-zone'].forEach(id => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
-  el.addEventListener('dragleave', () => el.classList.remove('dragover'));
-  el.addEventListener('drop', e => {
-    e.preventDefault(); el.classList.remove('dragover');
-    const file = e.dataTransfer.files[0];
-    if (file) {
-      const input = document.getElementById('item-file');
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      input.files = dt.files;
-      previewFile(input, 'item-preview');
-    }
-  });
-});
-
-// 同步 System 页的 API 地址输入框
-document.addEventListener('DOMContentLoaded', () => {
-  const apiInput = document.getElementById('cfg-api');
-  const camInput = document.getElementById('cfg-cam');
-  if (apiInput) apiInput.value = API;
-  if (camInput) camInput.value = CAM;
-});
+// ── 启动 ──────────────────────────────────────────────────────
+document.getElementById('cfg-api').value = API;
+document.getElementById('cfg-cam').value = CAM;
+initStream();
 </script>
 </body>
 </html>
