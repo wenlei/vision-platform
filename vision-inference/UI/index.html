@@ -615,7 +615,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); }
             <button class="btn orient-btn" id="btn-mirror" onclick="toggleMirror()">⟺ 镜像</button>
             <button class="btn orient-btn" id="btn-vflip" onclick="toggleVFlip()">↕ 翻转</button>
           </div>
-          <button class="btn danger" style="width:100%;margin-top:8px" onclick="resetOrientation()">✕ 重置方向</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
+            <button class="btn" style="background:#1a3a1a;border-color:#2d7a42;color:#5dcc7a;font-weight:700" onclick="saveOrientation()">✓ 完成</button>
+            <button class="btn danger" onclick="resetOrientation()">✕ 重置</button>
+          </div>
         </div>
 
         <!-- 检测结果 -->
@@ -873,28 +876,32 @@ setInterval(checkHealth, 10000);
 checkHealth();
 
 // ══════════════════════════════════════════════════════════════
-// LIVE 页
 // ══════════════════════════════════════════════════════════════
-let cssDeg  = 0;
-let hmirror = 0;
-let vflip   = 0;
+// LIVE 页 — 方向全部 CSS transform，不操作 ESP32 传感器
+// 架构：ESP32 原始流 → stream_proxy(转发) → 浏览器 CSS transform
+// ══════════════════════════════════════════════════════════════
+let cssDeg  = 0;   // CSS 旋转角度
+let hmirror = 0;   // CSS 水平镜像
+let vflip   = 0;   // CSS 垂直翻转
 
 function initStream() {
   const img = document.getElementById('stream-img');
-  img.src = CAM + ':81/';
+  // 从 stream_proxy 读取已保存的方向参数
+  fetch(API + '/stream/config').then(r => r.json()).then(d => {
+    cssDeg  = d.rotate  || 0;
+    hmirror = d.hmirror || 0;
+    vflip   = d.vflip   || 0;
+    applyOrientation();
+    updateOrientBtns();
+  }).catch(() => {});
+  // 连接 stream_proxy 的 MJPEG 流（不直连 ESP32）
+  img.src = API + '/stream?t=' + Date.now();
   img.onload = () => {
     document.getElementById('stream-offline').style.display = 'none';
     document.getElementById('live-status').textContent = 'LIVE';
     document.getElementById('live-status').className = 'badge green';
   };
   img.onerror = onStreamError;
-  // 读取传感器当前状态
-  fetch(CAM + '/status').then(r => r.json()).then(d => {
-    hmirror = d.hmirror || 0;
-    vflip   = d.vflip   || 0;
-    applyOrientation();
-    updateOrientBtns();
-  }).catch(() => {});
 }
 
 function onStreamError() {
@@ -904,15 +911,20 @@ function onStreamError() {
   document.getElementById('live-status').className = 'badge red';
 }
 
+// CSS transform：直接修改 img style，不重连流，不操作 ESP32
 function applyOrientation() {
   const img = document.getElementById('stream-img');
-  img.style.transform = cssDeg ? `rotate(${cssDeg}deg)` : '';
+  let t = '';
+  if (hmirror) t += 'scaleX(-1) ';
+  if (vflip)   t += 'scaleY(-1) ';
+  if (cssDeg)  t += `rotate(${cssDeg}deg) `;
+  img.style.transform = t.trim() || 'none';
+  img.style.display = 'block';
 }
 
 function updateOrientBtns() {
   document.getElementById('btn-mirror').classList.toggle('primary', hmirror === 1);
   document.getElementById('btn-vflip').classList.toggle('primary', vflip === 1);
-  // 同步 Devices 页
   const dm = document.getElementById('dev-mirror-btn');
   const dv = document.getElementById('dev-vflip-btn');
   if (dm) dm.classList.toggle('primary', hmirror === 1);
@@ -927,27 +939,28 @@ function updateOrientBtns() {
   }
 }
 
-function rotateCW()  { cssDeg = (cssDeg + 90) % 360; applyOrientation(); }
-function rotateCCW() { cssDeg = (cssDeg - 90 + 360) % 360; applyOrientation(); }
+function rotateCW()     { cssDeg = (cssDeg + 90)       % 360; applyOrientation(); updateOrientBtns(); }
+function rotateCCW()    { cssDeg = (cssDeg - 90 + 360) % 360; applyOrientation(); updateOrientBtns(); }
+function toggleMirror() { hmirror = hmirror ? 0 : 1; applyOrientation(); updateOrientBtns(); }
+function toggleVFlip()  { vflip   = vflip   ? 0 : 1; applyOrientation(); updateOrientBtns(); }
 
-async function sendCamConfig(params) {
+// 「完成」按钮：把当前参数保存到后端 yaml
+async function saveOrientation() {
   try {
-    const r = await fetch(`${CAM}/config?${params}`);
-    const d = await r.json();
-    hmirror = d.hmirror;
-    vflip   = d.vflip;
-    updateOrientBtns();
-    toast('方向已更新', 'ok');
-  } catch { toast('摄像头未连接', 'err'); }
+    await fetch(API + '/stream/config', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({rotate: cssDeg, hmirror, vflip})
+    });
+    toast('✅ 方向参数已保存', 'ok');
+  } catch(e) { toast('保存失败: ' + e.message, 'err'); }
 }
 
-function toggleMirror() { sendCamConfig(`hmirror=${hmirror ? 0 : 1}`); }
-function toggleVFlip()  { sendCamConfig(`vflip=${vflip ? 0 : 1}`); }
-
 async function resetOrientation() {
-  cssDeg = 0;
+  cssDeg = 0; hmirror = 0; vflip = 0;
   applyOrientation();
-  await sendCamConfig('vflip=0&hmirror=0');
+  updateOrientBtns();
+  await saveOrientation();
 }
 
 // 检测
