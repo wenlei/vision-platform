@@ -15,6 +15,7 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.config import log_level, log_format
@@ -48,8 +49,14 @@ app.include_router(stream_router)
 # ── 静态文件服务（Web UI）────────────────────────────────────
 _BASE = Path(__file__).parent.parent
 UI_DIR = _BASE / "UI"
+
+# GET / → 直接返回 index.html，无需在地址栏输入文件名
+@app.get("/")
+async def root():
+    return FileResponse(str(UI_DIR / "index.html"))
+
 if UI_DIR.exists():
     app.mount("/ui", StaticFiles(directory=str(UI_DIR)), name="ui")
-    log.info("Static files mounted at /ui from %s", UI_DIR)
+    log.info("UI mounted at /ui, root GET / → index.html")
 
 log.info("Vision Inference Service ready")
