@@ -24,10 +24,10 @@ device: gpu
 # CPU 路线使用内嵌 PostgreSQL 时，host 填 localhost。
 # 密码通过 .env 文件注入，不在此处明文填写。
 database:
-  host: 192.168.50.118       # PostgreSQL 服务地址
+  host: ${DB_HOST}             # PostgreSQL 服务地址（实际值在 .env 中定义）
   port: 5432                 # 默认端口
-  user: wenlei               # 数据库用户名
-  password: ${DB_PASS}       # 实际值在 .env 中定义：DB_PASS=xxx
+  user: ${DB_USER}             # 数据库用户名（实际值在 .env 中定义）
+  password: ${DB_PASS}       # 实际值在 .env 中定义
   name: vision_db            # 数据库名称
 
 

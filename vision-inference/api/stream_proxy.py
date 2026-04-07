@@ -31,8 +31,11 @@ def _camera_cfg() -> dict:
     return cfg.get("camera", {})
 
 
+_DEFAULT_SOURCE = "http://192.168.50.87:81/"
+
+
 def _esp32_stream_url(mac: str = None) -> str:
-    return _camera_cfg().get("source", "http://192.168.50.87:81/")
+    return _camera_cfg().get("source", _DEFAULT_SOURCE)
 
 
 def _rotate_degrees() -> int:
@@ -124,7 +127,7 @@ def get_stream_config():
     """Return current stream config (rotate/hmirror/vflip all handled server-side)."""
     cam = _camera_cfg()
     return {
-        "source":  cam.get("source",  "http://192.168.50.87:81/"),
+        "source":  cam.get("source",  _DEFAULT_SOURCE),
         "rotate":  int(cam.get("rotate",  0)),
         "hmirror": int(cam.get("hmirror", 0)),
         "vflip":   int(cam.get("vflip",   0)),

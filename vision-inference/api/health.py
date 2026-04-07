@@ -13,7 +13,7 @@ import torch
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, FileResponse
 
-from api.config import cfg, storage_mode, image_dir, face_thresholds, log_level
+from api.config import cfg, storage_mode, image_dir, face_thresholds, log_level, db_config
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,4 +54,5 @@ def health():
             "high": high_th,
             "low": low_th,
         },
+        "db_host": db_config()["host"],
     }

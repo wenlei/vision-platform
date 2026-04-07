@@ -1,5 +1,5 @@
 // ── 全局配置 ─────────────────────────────────────────────────
-let API = localStorage.getItem('vision_api') || 'http://192.168.50.71:8000';
+let API = localStorage.getItem('vision_api') || location.origin;
 let CAM = localStorage.getItem('vision_cam') || 'http://192.168.50.87';
 
 // ── 工具函数 ─────────────────────────────────────────────────
@@ -85,6 +85,13 @@ function loadOrientConfig() {
     rotate  = d.rotate  || 0;
     hmirror = d.hmirror || 0;
     vflip   = d.vflip   || 0;
+    // 从 source 提取 ESP32 基地址
+    if (d.source) {
+      try {
+        const u = new URL(d.source);
+        CAM = u.protocol + '//' + u.hostname;
+      } catch {}
+    }
     updateOrientBtns();
   }).catch(() => {});
 }
@@ -399,12 +406,20 @@ async function registerFace() {
 // ══════════════════════════════════════════════════════════════
 // DEVICES 页
 // ══════════════════════════════════════════════════════════════
-function initDevices() {
+async function initDevices() {
   const list = document.getElementById('devices-list');
+  let dbHost = '-';
+  try {
+    const r = await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
+    const d = await r.json();
+    dbHost = d.db_host || '-';
+  } catch {}
+  const apiUrl = new URL(API);
+  const camUrl = CAM.replace('http://','');
   const devices = [
-    { name: 'desk-cam-01', ip: CAM.replace('http://',''), role: '摄像头端点', icon: '📷', type: 'esp32' },
-    { name: 'Alchemy Furnace', ip: API.replace('http://','').split(':')[0], role: 'GPU 推理服务', icon: '🖥️', type: 'furnace' },
-    { name: 'PostgreSQL LXC', ip: '192.168.50.118', role: '数据库', icon: '🗄️', type: 'db' },
+    { name: 'desk-cam-01', ip: camUrl, role: '摄像头端点', icon: '📷', type: 'esp32' },
+    { name: 'Alchemy Furnace', ip: apiUrl.hostname, role: 'GPU 推理服务', icon: '🖥️', type: 'furnace' },
+    { name: 'PostgreSQL LXC', ip: dbHost, role: '数据库', icon: '🗄️', type: 'db' },
   ];
   list.innerHTML = '';
   devices.forEach(d => {

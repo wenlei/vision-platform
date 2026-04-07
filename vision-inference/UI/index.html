@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vision Platform</title>
-<link rel="stylesheet" href="/ui/style.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -294,14 +294,14 @@
         <div class="config-row">
           <span class="config-key">INFERENCE_API</span>
           <div class="config-val">
-            <input type="text" id="cfg-api" value="http://192.168.50.71:8000" style="width:100%">
+            <input type="text" id="cfg-api" style="width:100%">
           </div>
           <button class="btn primary" onclick="saveApiConfig()">保存</button>
         </div>
         <div class="config-row">
           <span class="config-key">CAMERA_BASE</span>
           <div class="config-val">
-            <input type="text" id="cfg-cam" value="http://192.168.50.87" style="width:100%">
+            <input type="text" id="cfg-cam" style="width:100%">
           </div>
           <button class="btn" onclick="restartStream()">重连流</button>
         </div>
@@ -313,6 +313,6 @@
 
 <div id="toast"></div>
 
-<script src="/ui/app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
