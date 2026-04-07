@@ -74,18 +74,16 @@ face:
   threshold_low: 0.40        # 最低识别阈值，建议范围 0.35~0.50
 
 
-# -- 摄像头默认方向 --------------------------------------------
-# 容器侧记录的全局默认值，支持多摄像头时作为 fallback。
-# 实际方向由设备抽象层通过 MAC 查询 devices 表来管理。
+# -- 摄像头方向 ------------------------------------------------
+# 服务端 Pillow 逐帧处理，同时用于：
+#   - stream_proxy MJPEG 流
+#   - storage.apply_orientation 保存/推理前的图像矫正
 #
-# 固件层（vflip/hmirror）：写入传感器寄存器，重启后持久生效。
-# 客户端层（css_rotate）：仅影响 UI 显示，不改变图像数据。
+# 通过 UI System 页或 POST /stream/config 修改，持久化到此文件。
 camera:
-  default_vflip: 0           # 0=正常 | 1=上下翻转
-  default_hmirror: 0         # 0=正常 | 1=水平镜像
   rotate: 0                  # 服务端旋转：0 / 90 / 180 / 270（顺时针）
-  hmirror: 0                 # 服务端水平镜像：0/1（Pillow 处理，不写 ESP32）
-  vflip: 0                   # 服务端垂直翻转：0/1（Pillow 处理，不写 ESP32）
+  hmirror: 0                 # 服务端水平镜像：0/1
+  vflip: 0                   # 服务端垂直翻转：0/1
   source: ${CAM_STREAM_URL}    # ESP32 MJPEG 源流地址（实际值在 .env 中定义）
 
 

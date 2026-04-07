@@ -68,27 +68,26 @@ def save_annotated_file(bgr_array: np.ndarray, device_tag: str) -> str:
 
 def apply_orientation(img_pil: Image.Image) -> Image.Image:
     """
-    根据全局默认方向配置矫正图像。
+    根据 camera 方向配置矫正图像（与 stream_proxy 使用同一组参数）。
 
     处理顺序：
-      1. CSS 旋转角度（0/90/180/270）
-      2. 水平镜像（hmirror）
-      3. 垂直翻转（vflip）
+      1. 水平镜像（hmirror）
+      2. 垂直翻转（vflip）
+      3. 旋转角度（0/90/180/270）
 
-    注意：固件层的 vflip/hmirror 已在传感器端生效，
-    此处处理的是容器侧的全局默认方向补偿。
+    这些参数由 POST /stream/config 持久化到 app-runtime.yaml 的
+    camera.rotate / camera.hmirror / camera.vflip 字段。
     """
     cam = camera_defaults()
-    rotate = cam.get("default_css_rotate", 0)
-    vflip = cam.get("default_vflip", 0)
-    hmirror = cam.get("default_hmirror", 0)
+    hmirror = int(cam.get("hmirror", 0))
+    vflip = int(cam.get("vflip", 0))
+    rotate = int(cam.get("rotate", 0))
 
-    if rotate:
-        # PIL rotate 是逆时针，CSS rotate 是顺时针，取反
-        img_pil = img_pil.rotate(-rotate, expand=True)
     if hmirror:
         img_pil = ImageOps.mirror(img_pil)
     if vflip:
         img_pil = ImageOps.flip(img_pil)
+    if rotate:
+        img_pil = img_pil.rotate(-rotate, expand=True)
 
     return img_pil
