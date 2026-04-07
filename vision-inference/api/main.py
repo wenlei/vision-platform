@@ -33,19 +33,15 @@ UI_DIR = _BASE / "UI"
 
 @app.get("/")
 async def root():
-    """读取 index.html 内容直接返回 HTMLResponse，无 ETag，禁用缓存"""
+    """GET / → 返回 index.html，no-cache"""
     content = (UI_DIR / "index.html").read_text(encoding="utf-8")
-    return HTMLResponse(
-        content=content,
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma":         "no-cache",
-            "Expires":        "0",
-        }
-    )
+    return HTMLResponse(content=content, headers={
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache", "Expires": "0",
+    })
 
 if UI_DIR.exists():
     app.mount("/ui", StaticFiles(directory=str(UI_DIR)), name="ui")
-    log.info("UI at /ui, GET / → HTMLResponse (no-cache, no-etag)")
+    log.info("UI mounted at /ui → %s", UI_DIR)
 
 log.info("Vision Inference Service ready")
