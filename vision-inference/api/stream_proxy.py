@@ -214,6 +214,42 @@ async def stream_default():
     )
 
 
+@router.get("/capture")
+async def capture_frame():
+    """Return a single JPEG frame (with transforms applied)."""
+    bc = _get_broadcaster()
+    # If broadcaster has a recent frame, use it
+    if bc.latest_frame:
+        return StreamingResponse(
+            io.BytesIO(bc.latest_frame),
+            media_type="image/jpeg",
+        )
+    # Otherwise grab one directly from ESP32
+    try:
+        source = _esp32_stream_url()
+        base = source.rsplit(":", 1)[0]  # strip :81/ → http://ip
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+            r = await client.get(base + "/capture")
+            jpeg = r.content
+            frame = _process_frame(jpeg, bc.rotate, bc.hmirror, bc.vflip)
+            return StreamingResponse(io.BytesIO(frame), media_type="image/jpeg")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Capture failed: {e}")
+
+
+@router.get("/status")
+async def cam_status():
+    """Proxy ESP32 /status endpoint."""
+    try:
+        source = _esp32_stream_url()
+        base = source.rsplit(":", 1)[0]
+        async with httpx.AsyncClient(timeout=httpx.Timeout(3.0)) as client:
+            r = await client.get(base + "/status")
+            return JSONResponse(r.json())
+    except Exception:
+        raise HTTPException(status_code=502, detail="Camera offline")
+
+
 @router.get("/config")
 def get_stream_config():
     """Return current stream config."""

@@ -1,6 +1,5 @@
 // ── 全局配置 ─────────────────────────────────────────────────
 let API = localStorage.getItem('vision_api') || location.origin;
-let CAM = localStorage.getItem('vision_cam') || 'http://192.168.50.87';
 
 // ── 工具函数 ─────────────────────────────────────────────────
 function esc(str) {
@@ -103,13 +102,6 @@ function loadOrientConfig() {
     rotate  = d.rotate  || 0;
     hmirror = d.hmirror || 0;
     vflip   = d.vflip   || 0;
-    // 从 source 提取 ESP32 基地址
-    if (d.source) {
-      try {
-        const u = new URL(d.source);
-        CAM = u.protocol + '//' + u.hostname;
-      } catch {}
-    }
     updateOrientBtns();
   }).catch(() => {});
 }
@@ -166,7 +158,7 @@ async function triggerDetect() {
   const result = document.getElementById('detect-result');
   result.innerHTML = '<span style="color:var(--text3)">拍照中...</span>';
   try {
-    const capR = await fetch(CAM + '/capture');
+    const capR = await fetch(API + '/stream/capture');
     const blob = await capR.blob();
     const fd = new FormData();
     fd.append('file', blob, 'capture.jpg');
@@ -195,7 +187,7 @@ async function triggerFaceIdentify() {
   const result = document.getElementById('face-result');
   result.textContent = '识别中...';
   try {
-    const capR = await fetch(CAM + '/capture');
+    const capR = await fetch(API + '/stream/capture');
     const blob = await capR.blob();
     const fd = new FormData();
     fd.append('file', blob, 'capture.jpg');
@@ -216,7 +208,7 @@ async function triggerFaceIdentify() {
 // 截屏（后台已应用 rotate/hmirror/vflip，直接保存）
 async function screenshot() {
   try {
-    const r = await fetch(CAM + '/capture');
+    const r = await fetch(API + '/stream/capture');
     const blob = await r.blob();
     const a = document.createElement('a');
     a.download = `desk-${Date.now()}.jpg`;
@@ -433,9 +425,14 @@ async function initDevices() {
     dbHost = d.db_host || '-';
   } catch {}
   const apiUrl = new URL(API);
-  const camUrl = CAM.replace('http://','');
+  let camSource = '-';
+  try {
+    const sc = await fetch(API + '/stream/config', { signal: AbortSignal.timeout(3000) });
+    const sd = await sc.json();
+    if (sd.source) camSource = new URL(sd.source).hostname;
+  } catch {}
   const devices = [
-    { name: 'desk-cam-01', ip: camUrl, role: '摄像头端点', icon: '📷', type: 'esp32' },
+    { name: 'desk-cam-01', ip: camSource, role: '摄像头端点', icon: '📷', type: 'esp32' },
     { name: 'Alchemy Furnace', ip: apiUrl.hostname, role: 'GPU 推理服务', icon: '🖥️', type: 'furnace' },
     { name: 'PostgreSQL LXC', ip: dbHost, role: '数据库', icon: '🗄️', type: 'db' },
   ];
@@ -463,9 +460,9 @@ async function pingDevices() {
     await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
     setDevStatus('furnace', 'online');
   } catch { setDevStatus('furnace', 'offline'); }
-  // Ping ESP32
+  // Ping ESP32 (通过后台代理)
   try {
-    await fetch(CAM + '/status', { signal: AbortSignal.timeout(3000) });
+    await fetch(API + '/stream/status', { signal: AbortSignal.timeout(3000) });
     setDevStatus('esp32', 'online');
   } catch { setDevStatus('esp32', 'offline'); }
   // DB 通过推理服务 health 间接判断（若推理服务在线则 DB 可达）
@@ -555,9 +552,7 @@ async function triggerCleanup() {
 
 function saveApiConfig() {
   API = document.getElementById('cfg-api').value.trim();
-  CAM = document.getElementById('cfg-cam').value.trim();
   localStorage.setItem('vision_api', API);
-  localStorage.setItem('vision_cam', CAM);
   toast('配置已保存，重新连接中...', 'ok');
   checkHealth();
   initStream();
@@ -593,7 +588,5 @@ setupDropZone('face-drop-zone', 'face-file', 'face-preview');
 // ── 同步 System 页的 API 地址输入框 ─────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   const apiInput = document.getElementById('cfg-api');
-  const camInput = document.getElementById('cfg-cam');
   if (apiInput) apiInput.value = API;
-  if (camInput) camInput.value = CAM;
 });
