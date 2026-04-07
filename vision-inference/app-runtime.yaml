@@ -86,7 +86,7 @@ camera:
   rotate: 0                  # 服务端旋转：0 / 90 / 180 / 270（顺时针）
   hmirror: 0                 # 服务端水平镜像：0/1（Pillow 处理，不写 ESP32）
   vflip: 0                   # 服务端垂直翻转：0/1（Pillow 处理，不写 ESP32）
-  source: http://192.168.50.87:81/  # ESP32 MJPEG 源流地址
+  source: ${CAM_STREAM_URL}    # ESP32 MJPEG 源流地址（实际值在 .env 中定义）
 
 
 # -- 日志 ------------------------------------------------------
