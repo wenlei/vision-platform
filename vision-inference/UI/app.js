@@ -208,7 +208,7 @@ async function triggerFaceIdentify() {
 // 截屏（后台已应用 rotate/hmirror/vflip，直接保存）
 async function screenshot() {
   try {
-    const r = await fetch(API + '/stream/capture');
+    const r = await fetch(API + '/stream/snapshot');
     const blob = await r.blob();
     const a = document.createElement('a');
     a.download = `desk-${Date.now()}.jpg`;

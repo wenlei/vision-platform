@@ -80,10 +80,7 @@ def _process_frame(jpeg_bytes: bytes, rotate: int, hmirror: int, vflip: int) -> 
 class MJPEGBroadcaster:
     """
     Maintains a single httpx connection to ESP32-CAM and broadcasts
-    processed frames to all subscribers. Handles:
-    - One ESP32 connection shared by all clients
-    - Server-side rotate/hmirror/vflip (updated live)
-    - Auto-start on first subscriber, auto-stop on last unsubscribe
+    processed frames to all subscribers.
     """
 
     def __init__(self, source_url: str):
@@ -92,7 +89,8 @@ class MJPEGBroadcaster:
         self.hmirror = _hmirror()
         self.vflip = _vflip()
         self.latest_frame: bytes = b""
-        self._condition = asyncio.Condition()
+        self._frame_id = 0
+        self._event = asyncio.Event()
         self._task: asyncio.Task | None = None
         self._subscribers = 0
 
@@ -126,9 +124,10 @@ class MJPEGBroadcaster:
                                 except Exception as e:
                                     log.warning("Frame process failed: %s", e)
                                     frame = jpeg
-                                async with self._condition:
-                                    self.latest_frame = frame
-                                    self._condition.notify_all()
+                                self.latest_frame = frame
+                                self._frame_id += 1
+                                self._event.set()
+                                self._event.clear()
             except asyncio.CancelledError:
                 log.info("Broadcaster fetch loop cancelled")
                 return
@@ -137,13 +136,11 @@ class MJPEGBroadcaster:
                 await asyncio.sleep(2)
 
     async def _ensure_running(self):
-        """Start fetch task if not already running."""
         if self._task is None or self._task.done():
             self._task = asyncio.create_task(self._fetch_loop())
             log.info("Broadcaster started for %s", self.source_url)
 
     async def _maybe_stop(self):
-        """Stop fetch task if no subscribers remain."""
         if self._subscribers <= 0 and self._task and not self._task.done():
             self._task.cancel()
             try:
@@ -157,21 +154,20 @@ class MJPEGBroadcaster:
         """Async generator yielding MJPEG multipart frames to one client."""
         self._subscribers += 1
         await self._ensure_running()
+        last_seen = self._frame_id
         try:
-            # Wait for the first frame before yielding
-            async with self._condition:
-                await self._condition.wait()
             while True:
-                frame = self.latest_frame
+                # Wait until a new frame is available
+                while self._frame_id == last_seen:
+                    await asyncio.sleep(0.01)
+                last_seen = self._frame_id
                 yield (
                     b"--frame\r\n"
                     b"Content-Type: image/jpeg\r\n"
                     b"\r\n" +
-                    frame +
+                    self.latest_frame +
                     b"\r\n"
                 )
-                async with self._condition:
-                    await self._condition.wait()
         except asyncio.CancelledError:
             pass
         finally:
@@ -216,25 +212,38 @@ async def stream_default():
 
 @router.get("/capture")
 async def capture_frame():
-    """Return a single JPEG frame (with transforms applied)."""
-    bc = _get_broadcaster()
-    # If broadcaster has a recent frame, use it
-    if bc.latest_frame:
-        return StreamingResponse(
-            io.BytesIO(bc.latest_frame),
-            media_type="image/jpeg",
-        )
-    # Otherwise grab one directly from ESP32
+    """Return a single raw JPEG frame (no transforms).
+    Used by detection/faces which apply their own orientation via apply_orientation().
+    """
     try:
         source = _esp32_stream_url()
         base = source.rsplit(":", 1)[0]  # strip :81/ → http://ip
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
             r = await client.get(base + "/capture")
-            jpeg = r.content
-            frame = _process_frame(jpeg, bc.rotate, bc.hmirror, bc.vflip)
-            return StreamingResponse(io.BytesIO(frame), media_type="image/jpeg")
+            return StreamingResponse(io.BytesIO(r.content), media_type="image/jpeg")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Capture failed: {e}")
+
+
+@router.get("/snapshot")
+async def snapshot_frame():
+    """Return a single JPEG frame with transforms applied (for screenshot download)."""
+    bc = _get_broadcaster()
+    if bc.latest_frame:
+        return StreamingResponse(
+            io.BytesIO(bc.latest_frame),
+            media_type="image/jpeg",
+        )
+    # Fallback: grab from ESP32 and transform
+    try:
+        source = _esp32_stream_url()
+        base = source.rsplit(":", 1)[0]
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+            r = await client.get(base + "/capture")
+            frame = _process_frame(r.content, bc.rotate, bc.hmirror, bc.vflip)
+            return StreamingResponse(io.BytesIO(frame), media_type="image/jpeg")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Snapshot failed: {e}")
 
 
 @router.get("/status")

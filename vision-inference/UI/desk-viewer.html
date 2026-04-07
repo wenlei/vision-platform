@@ -108,7 +108,7 @@ function toggleVFlip()  { sendConfig({ vflip: vflip ? 0 : 1 }); }
 
 async function screenshot() {
   try {
-    const res = await fetch(API + '/stream/capture');
+    const res = await fetch(API + '/stream/snapshot');
     const blob = await res.blob();
     const a = document.createElement('a');
     a.download = 'desk-cam-' + Date.now() + '.jpg';
