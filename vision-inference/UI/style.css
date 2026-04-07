@@ -261,6 +261,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); }
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  transition: transform 0.2s ease;
+  transform-origin: center center;
 }
 
 .stream-overlay {

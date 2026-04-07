@@ -102,8 +102,18 @@ function loadOrientConfig() {
     rotate  = d.rotate  || 0;
     hmirror = d.hmirror || 0;
     vflip   = d.vflip   || 0;
+    applyCSSTransform();
     updateOrientBtns();
   }).catch(() => {});
+}
+
+function applyCSSTransform() {
+  const img = document.getElementById('stream-img');
+  let t = '';
+  if (hmirror) t += ' scaleX(-1)';
+  if (vflip)   t += ' scaleY(-1)';
+  if (rotate)  t += ` rotate(${rotate}deg)`;
+  img.style.transform = t.trim() || 'none';
 }
 
 function onStreamError() {
@@ -131,6 +141,13 @@ function updateOrientBtns() {
 }
 
 async function sendOrientConfig(update) {
+  // 即时 CSS 预览
+  if (update.rotate  !== undefined) rotate  = update.rotate;
+  if (update.hmirror !== undefined) hmirror = update.hmirror;
+  if (update.vflip   !== undefined) vflip   = update.vflip;
+  applyCSSTransform();
+  updateOrientBtns();
+  // 持久化到 yaml
   try {
     const r = await fetch(API + '/stream/config', {
       method: 'POST',
@@ -141,10 +158,9 @@ async function sendOrientConfig(update) {
     rotate  = d.rotate;
     hmirror = d.hmirror;
     vflip   = d.vflip;
+    applyCSSTransform();
     updateOrientBtns();
-    // 重载流以应用新配置
-    initStream();
-    toast('方向已更新', 'ok');
+    toast('方向已保存', 'ok');
   } catch { toast('服务未连接', 'err'); }
 }
 
@@ -540,8 +556,8 @@ async function saveOrientConfig() {
     rotate  = d.rotate;
     hmirror = d.hmirror;
     vflip   = d.vflip;
+    applyCSSTransform();
     updateOrientBtns();
-    initStream();
     toast('方向已保存', 'ok');
   } catch { toast('保存失败', 'err'); }
 }

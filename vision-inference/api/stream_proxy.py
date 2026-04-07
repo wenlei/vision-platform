@@ -2,19 +2,18 @@
 stream_proxy.py -- MJPEG stream proxy with fan-out broadcaster
 
 Routes:
-  GET /stream             proxy default camera MJPEG stream
-  GET /stream/{mac}       proxy specified MAC camera
+  GET /stream             proxy raw camera MJPEG stream (no transform)
+  GET /stream/capture     single raw frame (for detection/faces)
+  GET /stream/snapshot    single frame with transforms (for screenshot)
+  GET /stream/status      proxy ESP32 /status
   GET /stream/config      query rotate/hmirror/vflip/source config
   POST /stream/config     update config, persist to app-runtime.yaml
 
-All image transforms (rotate, hmirror, vflip) are done server-side
-with Pillow. No ESP32 sensor writes needed.
-
 Architecture:
-  ESP32-CAM only supports one HTTP stream connection at a time.
-  MJPEGBroadcaster maintains a single httpx connection to ESP32
-  and fans out processed frames to all browser subscribers via
-  asyncio.Condition.
+  - Stream/capture deliver RAW frames from ESP32 (no Pillow processing)
+  - Frontend applies CSS transforms for live preview
+  - Backend applies transforms only when saving/detecting (via storage.apply_orientation)
+  - Config params are the single source of truth in app-runtime.yaml
 """
 
 import io
@@ -22,7 +21,6 @@ import logging
 import asyncio
 import httpx
 import yaml
-from pathlib import Path
 from PIL import Image
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -44,23 +42,14 @@ def _esp32_stream_url(mac: str = None) -> str:
     return _camera_cfg().get("source", _DEFAULT_SOURCE)
 
 
-def _rotate_degrees() -> int:
-    return int(_camera_cfg().get("rotate", 0))
-
-
-def _hmirror() -> int:
-    return int(_camera_cfg().get("hmirror", 0))
-
-
-def _vflip() -> int:
-    return int(_camera_cfg().get("vflip", 0))
+def _esp32_base_url() -> str:
+    """ESP32 HTTP base (without :81 stream port)."""
+    source = _esp32_stream_url()
+    return source.rsplit(":", 1)[0]
 
 
 def _process_frame(jpeg_bytes: bytes, rotate: int, hmirror: int, vflip: int) -> bytes:
-    """
-    Apply server-side image transforms using Pillow.
-    Returns original bytes unchanged when all params are 0.
-    """
+    """Apply image transforms using Pillow. Only used for /snapshot."""
     if rotate == 0 and hmirror == 0 and vflip == 0:
         return jpeg_bytes
     img = Image.open(io.BytesIO(jpeg_bytes))
@@ -75,27 +64,23 @@ def _process_frame(jpeg_bytes: bytes, rotate: int, hmirror: int, vflip: int) -> 
     return buf.getvalue()
 
 
-# ── MJPEG Broadcaster ───────────────────────────────────────
+# ── MJPEG Broadcaster (raw frames, no transform) ────────────
 
 class MJPEGBroadcaster:
     """
-    Maintains a single httpx connection to ESP32-CAM and broadcasts
-    processed frames to all subscribers.
+    Single httpx connection to ESP32-CAM, fans out raw frames
+    to all browser subscribers. No image processing here.
     """
 
     def __init__(self, source_url: str):
         self.source_url = source_url
-        self.rotate = _rotate_degrees()
-        self.hmirror = _hmirror()
-        self.vflip = _vflip()
         self.latest_frame: bytes = b""
         self._frame_id = 0
-        self._event = asyncio.Event()
         self._task: asyncio.Task | None = None
         self._subscribers = 0
 
     async def _fetch_loop(self):
-        """Pull MJPEG from ESP32 in a single connection, process and broadcast."""
+        """Pull raw MJPEG from ESP32, broadcast to subscribers."""
         while True:
             try:
                 async with httpx.AsyncClient(timeout=None) as client:
@@ -117,17 +102,8 @@ class MJPEGBroadcaster:
                                     break
                                 jpeg = buf[soi:eoi + 2]
                                 buf = buf[eoi + 2:]
-                                try:
-                                    frame = _process_frame(
-                                        jpeg, self.rotate, self.hmirror, self.vflip
-                                    )
-                                except Exception as e:
-                                    log.warning("Frame process failed: %s", e)
-                                    frame = jpeg
-                                self.latest_frame = frame
+                                self.latest_frame = jpeg
                                 self._frame_id += 1
-                                self._event.set()
-                                self._event.clear()
             except asyncio.CancelledError:
                 log.info("Broadcaster fetch loop cancelled")
                 return
@@ -151,13 +127,12 @@ class MJPEGBroadcaster:
             log.info("Broadcaster stopped (no subscribers)")
 
     async def subscribe(self):
-        """Async generator yielding MJPEG multipart frames to one client."""
+        """Async generator yielding raw MJPEG multipart frames."""
         self._subscribers += 1
         await self._ensure_running()
         last_seen = self._frame_id
         try:
             while True:
-                # Wait until a new frame is available
                 while self._frame_id == last_seen:
                     await asyncio.sleep(0.01)
                 last_seen = self._frame_id
@@ -174,15 +149,6 @@ class MJPEGBroadcaster:
             self._subscribers -= 1
             if self._subscribers <= 0:
                 await self._maybe_stop()
-
-    def update_transforms(self, rotate=None, hmirror=None, vflip=None):
-        """Update transform params (takes effect on next frame)."""
-        if rotate is not None:
-            self.rotate = rotate
-        if hmirror is not None:
-            self.hmirror = hmirror
-        if vflip is not None:
-            self.vflip = vflip
 
 
 # Module-level broadcaster singleton
@@ -201,7 +167,7 @@ def _get_broadcaster() -> MJPEGBroadcaster:
 @router.get("")
 @router.get("/")
 async def stream_default():
-    """Proxy default camera MJPEG stream (shared single ESP32 connection)."""
+    """Proxy raw MJPEG stream. CSS transforms are applied by the frontend."""
     bc = _get_broadcaster()
     log.info("New stream subscriber (total: %d)", bc._subscribers + 1)
     return StreamingResponse(
@@ -212,14 +178,13 @@ async def stream_default():
 
 @router.get("/capture")
 async def capture_frame():
-    """Return a single raw JPEG frame (no transforms).
-    Used by detection/faces which apply their own orientation via apply_orientation().
-    """
+    """Single raw JPEG frame from ESP32 (for detection/faces — they apply_orientation)."""
+    bc = _get_broadcaster()
+    if bc.latest_frame:
+        return StreamingResponse(io.BytesIO(bc.latest_frame), media_type="image/jpeg")
     try:
-        source = _esp32_stream_url()
-        base = source.rsplit(":", 1)[0]  # strip :81/ → http://ip
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
-            r = await client.get(base + "/capture")
+            r = await client.get(_esp32_base_url() + "/capture")
             return StreamingResponse(io.BytesIO(r.content), media_type="image/jpeg")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Capture failed: {e}")
@@ -227,33 +192,31 @@ async def capture_frame():
 
 @router.get("/snapshot")
 async def snapshot_frame():
-    """Return a single JPEG frame with transforms applied (for screenshot download)."""
+    """Single JPEG frame with transforms applied (for screenshot download)."""
+    cam = _camera_cfg()
+    r = int(cam.get("rotate", 0))
+    h = int(cam.get("hmirror", 0))
+    v = int(cam.get("vflip", 0))
+    # Get raw frame
     bc = _get_broadcaster()
-    if bc.latest_frame:
-        return StreamingResponse(
-            io.BytesIO(bc.latest_frame),
-            media_type="image/jpeg",
-        )
-    # Fallback: grab from ESP32 and transform
-    try:
-        source = _esp32_stream_url()
-        base = source.rsplit(":", 1)[0]
-        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
-            r = await client.get(base + "/capture")
-            frame = _process_frame(r.content, bc.rotate, bc.hmirror, bc.vflip)
-            return StreamingResponse(io.BytesIO(frame), media_type="image/jpeg")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Snapshot failed: {e}")
+    raw = bc.latest_frame
+    if not raw:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+                resp = await client.get(_esp32_base_url() + "/capture")
+                raw = resp.content
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Snapshot failed: {e}")
+    frame = _process_frame(raw, r, h, v)
+    return StreamingResponse(io.BytesIO(frame), media_type="image/jpeg")
 
 
 @router.get("/status")
 async def cam_status():
     """Proxy ESP32 /status endpoint."""
     try:
-        source = _esp32_stream_url()
-        base = source.rsplit(":", 1)[0]
         async with httpx.AsyncClient(timeout=httpx.Timeout(3.0)) as client:
-            r = await client.get(base + "/status")
+            r = await client.get(_esp32_base_url() + "/status")
             return JSONResponse(r.json())
     except Exception:
         raise HTTPException(status_code=502, detail="Camera offline")
@@ -261,7 +224,7 @@ async def cam_status():
 
 @router.get("/config")
 def get_stream_config():
-    """Return current stream config."""
+    """Return current orientation config."""
     cam = _camera_cfg()
     return {
         "source":  cam.get("source",  _DEFAULT_SOURCE),
@@ -272,7 +235,6 @@ def get_stream_config():
 
 
 class StreamConfigUpdate(BaseModel):
-    """Update stream config. rotate/hmirror/vflip all processed server-side by Pillow."""
     rotate:  int = None   # clockwise degrees: 0/90/180/270
     hmirror: int = None   # horizontal mirror: 0/1
     vflip:   int = None   # vertical flip: 0/1
@@ -282,9 +244,9 @@ class StreamConfigUpdate(BaseModel):
 @router.post("/config")
 def update_stream_config(body: StreamConfigUpdate):
     """
-    Update stream config and persist to app-runtime.yaml.
-    rotate/hmirror/vflip are applied by Pillow on every frame.
-    Takes effect immediately (in-memory cfg + broadcaster updated).
+    Update orientation config and persist to app-runtime.yaml.
+    Frontend reads these to apply CSS transforms.
+    Backend reads these in apply_orientation() when saving/detecting.
     """
     if body.rotate is not None and body.rotate not in (0, 90, 180, 270):
         raise HTTPException(status_code=400, detail="rotate must be 0, 90, 180, or 270")
@@ -321,22 +283,12 @@ def update_stream_config(body: StreamConfigUpdate):
         raise HTTPException(status_code=500, detail=f"Failed to write config: {e}")
 
     log.info("Stream config updated: %s", changed)
-
-    # Update broadcaster transforms live
-    bc = _get_broadcaster()
-    bc.update_transforms(
-        rotate=changed.get("rotate"),
-        hmirror=changed.get("hmirror"),
-        vflip=changed.get("vflip"),
-    )
-
-    # Return full config (same format as GET /stream/config)
     return get_stream_config()
 
 
 @router.get("/{mac}")
 async def stream_by_mac(mac: str):
-    """Proxy specified MAC camera MJPEG stream."""
+    """Proxy raw MJPEG stream for a specific MAC."""
     bc = _get_broadcaster()
     log.info("New stream subscriber mac=%s (total: %d)", mac, bc._subscribers + 1)
     return StreamingResponse(
