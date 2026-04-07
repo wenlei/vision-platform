@@ -1054,7 +1054,7 @@ async function loadHistory(label = '') {
       const time = item.timestamp ? new Date(item.timestamp).toLocaleString('zh-CN') : '';
       const thumb = item.image_url || item.image_path || '';
       return '<div class="history-card">'
-        + (thumb ? '<img class="history-thumb" src="' + API + '/' + thumb + '" onerror="this.style.display='none'">' : '')
+        + (thumb ? '<img class="history-thumb" src="' + API + '/' + thumb + '" onerror="this.style.display=\'none\'">' : '')
         + '<div class="history-info"><div class="history-time">' + time + '</div>'
         + '<div class="history-tags">' + tags + '</div></div></div>';
     }).join('');

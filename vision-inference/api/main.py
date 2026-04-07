@@ -1,10 +1,8 @@
-"""
-main.py -- FastAPI 应用入口
-"""
+"""main.py -- FastAPI 应用入口"""
 import logging
 from pathlib import Path
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from api.config import log_level, log_format
 
@@ -30,20 +28,24 @@ app.include_router(items_router)
 app.include_router(search_router)
 app.include_router(stream_router)
 
-_BASE = Path(__file__).parent.parent
+_BASE  = Path(__file__).parent.parent
 UI_DIR = _BASE / "UI"
 
 @app.get("/")
 async def root():
-    """返回 index.html，禁用缓存确保始终获取最新版本"""
-    resp = FileResponse(str(UI_DIR / "index.html"))
-    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
-    return resp
+    """读取 index.html 内容直接返回 HTMLResponse，无 ETag，禁用缓存"""
+    content = (UI_DIR / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(
+        content=content,
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma":         "no-cache",
+            "Expires":        "0",
+        }
+    )
 
 if UI_DIR.exists():
     app.mount("/ui", StaticFiles(directory=str(UI_DIR)), name="ui")
-    log.info("UI mounted at /ui, root GET / → index.html (no-cache)")
+    log.info("UI at /ui, GET / → HTMLResponse (no-cache, no-etag)")
 
 log.info("Vision Inference Service ready")
