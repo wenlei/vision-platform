@@ -38,7 +38,8 @@ def _load_env(env_path):
             key, _, value = line.partition('=')
             key = key.strip()
             value = value.strip().strip("'\"")
-            if key and key not in os.environ:
+            # Set if not in env, or if env has an empty value (docker compose placeholder)
+            if key and (key not in os.environ or os.environ[key] == ''):
                 os.environ[key] = value
 
 
