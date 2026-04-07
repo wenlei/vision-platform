@@ -49,16 +49,21 @@ def _esp32_base_url() -> str:
 
 
 def _process_frame(jpeg_bytes: bytes, rotate: int, hmirror: int, vflip: int) -> bytes:
-    """Apply image transforms using Pillow. Only used for /snapshot."""
+    """
+    Apply image transforms using Pillow to match CSS transform behavior.
+    CSS: transform: scaleX(-1) scaleY(-1) rotate(Ndeg)
+    CSS applies right-to-left: rotate first, then scale.
+    So Pillow must also: rotate first, then mirror/flip.
+    """
     if rotate == 0 and hmirror == 0 and vflip == 0:
         return jpeg_bytes
     img = Image.open(io.BytesIO(jpeg_bytes))
+    if rotate:
+        img = img.rotate(-rotate, expand=True)
     if hmirror:
         img = img.transpose(Image.FLIP_LEFT_RIGHT)
     if vflip:
         img = img.transpose(Image.FLIP_TOP_BOTTOM)
-    if rotate:
-        img = img.rotate(-rotate, expand=True)
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=85)
     return buf.getvalue()
