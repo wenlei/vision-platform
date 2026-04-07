@@ -65,19 +65,37 @@ checkHealth();
 let rotate  = 0;
 let hmirror = 0;
 let vflip   = 0;
+let streaming = false;
 
 function initStream() {
   const img = document.getElementById('stream-img');
-  // 通过后台 stream_proxy 获取已处理的 MJPEG 流（rotate/hmirror/vflip 已由 Pillow 应用）
   img.src = API + '/stream?' + Date.now();
   img.style.display = '';
+  streaming = true;
   img.onload = () => {
     document.getElementById('stream-offline').style.display = 'none';
     document.getElementById('live-status').textContent = 'LIVE';
     document.getElementById('live-status').className = 'badge green';
+    document.getElementById('btn-stream').textContent = '⏹ 断开';
+    document.getElementById('btn-stream').classList.add('danger');
   };
-  // 从后台读取持久化的方向配置
   loadOrientConfig();
+}
+
+function stopStream() {
+  const img = document.getElementById('stream-img');
+  img.src = '';
+  img.style.display = 'none';
+  streaming = false;
+  document.getElementById('stream-offline').style.display = 'flex';
+  document.getElementById('live-status').textContent = '已断开';
+  document.getElementById('live-status').className = 'badge amber';
+  document.getElementById('btn-stream').textContent = '▶ 连接';
+  document.getElementById('btn-stream').classList.remove('danger');
+}
+
+function toggleStream() {
+  streaming ? stopStream() : initStream();
 }
 
 function loadOrientConfig() {
