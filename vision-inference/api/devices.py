@@ -19,13 +19,12 @@ router = APIRouter(prefix="/devices", tags=["devices"])
 def list_devices():
     """返回 devices 表中所有设备，包含 name、location、stream_url。"""
     try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT mac, name, location, stream_url, registered_at"
-                    " FROM devices ORDER BY registered_at DESC"
-                )
-                rows = cur.fetchall()
+        with get_conn() as (conn, cur):
+            cur.execute(
+                "SELECT mac, name, location, stream_url, registered_at"
+                " FROM devices ORDER BY registered_at DESC"
+            )
+            rows = cur.fetchall()
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"DB error: {e}")
 
@@ -50,17 +49,16 @@ class StreamUrlUpdate(BaseModel):
 @router.patch("/{mac}/stream_url")
 def update_device_stream_url(mac: str, body: StreamUrlUpdate):
     """更新指定设备的 stream_url。"""
+    row = None
     try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE devices SET stream_url = %s WHERE mac = %s RETURNING name",
-                    (body.stream_url, mac.upper())
-                )
-                row = cur.fetchone()
-                if not row:
-                    raise HTTPException(status_code=404, detail=f"Device {mac} not found")
-            conn.commit()
+        with get_conn() as (conn, cur):
+            cur.execute(
+                "UPDATE devices SET stream_url = %s WHERE mac = %s RETURNING name",
+                (body.stream_url, mac.upper())
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail=f"Device {mac} not found")
     except HTTPException:
         raise
     except Exception as e:
