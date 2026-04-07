@@ -50,6 +50,9 @@
     <div class="page-header">
       <span class="page-title">📷 Live Preview</span>
       <div class="row">
+        <select id="device-select" onchange="switchDevice(this.value)" style="height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px">
+          <option value="">设备加载中...</option>
+        </select>
         <span id="live-status" class="badge amber">连接中</span>
         <button class="btn" id="btn-stream" onclick="toggleStream()">⏹ 断开</button>
         <button class="btn primary" onclick="triggerDetect()">⚡ 检测</button>

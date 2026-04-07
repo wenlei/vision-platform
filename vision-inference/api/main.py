@@ -20,6 +20,7 @@ from api.faces import router as faces_router
 from api.items import router as items_router
 from api.search import router as search_router
 from api.stream_proxy import router as stream_router
+from api.devices import router as devices_router
 
 app.include_router(health_router)
 app.include_router(detection_router)
@@ -27,6 +28,7 @@ app.include_router(faces_router)
 app.include_router(items_router)
 app.include_router(search_router)
 app.include_router(stream_router)
+app.include_router(devices_router)
 
 _BASE  = Path(__file__).parent.parent
 UI_DIR = _BASE / "UI"

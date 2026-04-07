@@ -79,6 +79,7 @@ function initStream() {
     document.getElementById('btn-stream').classList.add('danger');
   };
   loadOrientConfig();
+  loadDeviceSelect();
 }
 
 function stopStream() {
@@ -95,6 +96,54 @@ function stopStream() {
 
 function toggleStream() {
   streaming ? stopStream() : initStream();
+}
+
+async function loadDeviceSelect() {
+  const sel = document.getElementById('device-select');
+  if (!sel) return;
+  try {
+    const [devR, cfgR] = await Promise.all([
+      fetch(API + '/devices'),
+      fetch(API + '/stream/config'),
+    ]);
+    const devData = await devR.json();
+    const cfgData = await cfgR.json();
+    const devices = devData.devices || [];
+    const currentSource = cfgData.source || '';
+
+    sel.innerHTML = '';
+    if (!devices.length) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '无注册设备';
+      sel.appendChild(opt);
+      return;
+    }
+    devices.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.stream_url || '';
+      opt.textContent = d.name + (d.location ? ' · ' + d.location : '');
+      if (d.stream_url && d.stream_url === currentSource) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch {
+    sel.innerHTML = '<option value="">设备加载失败</option>';
+  }
+}
+
+async function switchDevice(streamUrl) {
+  if (!streamUrl) return;
+  try {
+    const r = await fetch(API + '/stream/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: streamUrl }),
+    });
+    if (!r.ok) { toast('切换设备失败', 'err'); return; }
+    toast('切换设备，重新连接...', 'ok');
+    stopStream();
+    setTimeout(initStream, 300);
+  } catch { toast('切换设备失败', 'err'); }
 }
 
 function loadOrientConfig() {

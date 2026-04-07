@@ -281,6 +281,14 @@ def update_stream_config(body: StreamConfigUpdate):
     if not changed:
         return get_stream_config()
 
+    # If source changed, reset broadcaster so next request reconnects to new URL
+    if "source" in changed:
+        global _broadcaster
+        if _broadcaster is not None and _broadcaster._task and not _broadcaster._task.done():
+            _broadcaster._task.cancel()
+        _broadcaster = None
+        log.info("Broadcaster reset for new source: %s", changed["source"])
+
     try:
         with open(runtime_path, "w", encoding="utf-8") as f:
             yaml.dump(raw, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
