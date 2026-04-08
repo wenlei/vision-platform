@@ -18,9 +18,24 @@ from api.models import yolo, clip_model, clip_preprocess, get_clip_embedding, DE
 from api.db import get_conn, save_to_db
 from api.storage import save_image_file, save_annotated_file, apply_orientation
 from api.device_layer import get_device_tag
+from api.config import cfg
 
 log = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _resolve_camera_ip(camera_ip: str) -> str:
+    """If camera_ip is unknown, extract from configured stream source URL."""
+    if camera_ip and camera_ip != "unknown":
+        return camera_ip
+    try:
+        source = cfg.get("camera", {}).get("source", "")
+        if source:
+            # e.g. http://192.168.50.87:81/ → 192.168.50.87
+            return source.split("//")[-1].split(":")[0].split("/")[0]
+    except Exception:
+        pass
+    return camera_ip
 
 
 def _search_custom_items(cur, embedding, threshold=0.75):
@@ -47,7 +62,7 @@ async def detect(request: Request,
     返回检测列表、标注图路径、描述文本。
     """
     mac = device_mac or request.headers.get("X-Device-MAC")
-    ip = camera_ip or request.headers.get("X-Device-IP", "unknown")
+    ip = _resolve_camera_ip(camera_ip or request.headers.get("X-Device-IP", "unknown"))
     tag = get_device_tag(mac)
 
     contents = await file.read()
