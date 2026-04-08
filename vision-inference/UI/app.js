@@ -74,9 +74,13 @@ async function pollStreamHealth() {
       document.getElementById('stream-img').style.display = '';
     } else {
       dot.classList.remove('active');
+      document.getElementById('stream-offline-msg').textContent = '摄像头离线';
+      document.getElementById('stream-offline').style.display = 'flex';
     }
   } catch {
     document.getElementById('live-dot').classList.remove('active');
+    document.getElementById('stream-offline-msg').textContent = '摄像头离线';
+    document.getElementById('stream-offline').style.display = 'flex';
   }
 }
 setInterval(pollStreamHealth, 2000);
@@ -105,9 +109,9 @@ function stopStream() {
   img.src = '';
   img.style.display = 'none';
   streaming = false;
+  document.getElementById('stream-offline-msg').textContent = '已断开';
   document.getElementById('stream-offline').style.display = 'flex';
-  document.getElementById('live-status').textContent = '已断开';
-  document.getElementById('live-status').className = 'badge amber';
+  document.getElementById('live-dot').classList.remove('active');
   document.getElementById('btn-stream').textContent = '▶ 连接';
   document.getElementById('btn-stream').classList.remove('danger');
 }
