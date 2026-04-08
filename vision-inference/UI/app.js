@@ -58,6 +58,32 @@ async function checkHealth() {
 setInterval(checkHealth, 10000);
 checkHealth();
 
+// ── Stream health poll ────────────────────────────────────────
+async function pollStreamHealth() {
+  if (!streaming) return;
+  try {
+    const r = await fetch(API + '/stream/health', { signal: AbortSignal.timeout(2000) });
+    const d = await r.json();
+    const statusEl = document.getElementById('live-status');
+    const offlineEl = document.getElementById('stream-offline');
+    if (d.online) {
+      statusEl.textContent = 'LIVE';
+      statusEl.className = 'badge green';
+      offlineEl.style.display = 'none';
+      document.getElementById('stream-img').style.display = '';
+    } else {
+      statusEl.textContent = '信号丢失';
+      statusEl.className = 'badge amber';
+    }
+  } catch {
+    if (streaming) {
+      document.getElementById('live-status').textContent = '离线';
+      document.getElementById('live-status').className = 'badge red';
+    }
+  }
+}
+setInterval(pollStreamHealth, 2000);
+
 // ══════════════════════════════════════════════════════════════
 // LIVE 页
 // ══════════════════════════════════════════════════════════════
@@ -71,13 +97,8 @@ function initStream() {
   img.src = API + '/stream?' + Date.now();
   img.style.display = '';
   streaming = true;
-  img.onload = () => {
-    document.getElementById('stream-offline').style.display = 'none';
-    document.getElementById('live-status').textContent = 'LIVE';
-    document.getElementById('live-status').className = 'badge green';
-    document.getElementById('btn-stream').textContent = '⏹ 断开';
-    document.getElementById('btn-stream').classList.add('danger');
-  };
+  document.getElementById('btn-stream').textContent = '⏹ 断开';
+  document.getElementById('btn-stream').classList.add('danger');
   loadOrientConfig();
   loadDeviceSelect();
 }

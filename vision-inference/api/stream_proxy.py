@@ -17,6 +17,7 @@ Architecture:
 """
 
 import io
+import time
 import logging
 import asyncio
 import httpx
@@ -81,6 +82,7 @@ class MJPEGBroadcaster:
         self.source_url = source_url
         self.latest_frame: bytes = b""
         self._frame_id = 0
+        self._last_frame_ts: float = 0.0
         self._task: asyncio.Task | None = None
         self._subscribers = 0
 
@@ -109,6 +111,7 @@ class MJPEGBroadcaster:
                                 buf = buf[eoi + 2:]
                                 self.latest_frame = jpeg
                                 self._frame_id += 1
+                                self._last_frame_ts = time.time()
             except asyncio.CancelledError:
                 log.info("Broadcaster fetch loop cancelled")
                 return
@@ -245,6 +248,15 @@ async def cam_status():
             return JSONResponse(r.json())
     except Exception:
         raise HTTPException(status_code=502, detail="Camera offline")
+
+
+@router.get("/health")
+def stream_health():
+    """Return broadcaster liveness: online if a frame arrived within the last 3 seconds."""
+    bc = _get_broadcaster() if _broadcaster else None
+    if bc and bc._last_frame_ts and (time.time() - bc._last_frame_ts) < 3.0:
+        return {"online": True, "frame_id": bc._frame_id}
+    return {"online": False, "frame_id": bc._frame_id if bc else 0}
 
 
 @router.get("/config")
