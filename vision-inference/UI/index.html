@@ -215,19 +215,77 @@
       <button class="btn" onclick="initDevices()">↺ 刷新</button>
     </div>
     <div class="page-body">
+
+      <!-- 基础设施拓扑 -->
+      <div class="card">
+        <div class="card-title">基础设施</div>
+        <div class="infra-topo">
+          <div class="infra-node" id="infra-cam">
+            <div class="infra-icon">📷</div>
+            <div class="infra-name">ESP32-CAM</div>
+            <div class="infra-meta" id="infra-cam-ip">-</div>
+            <span class="badge amber" id="infra-cam-status">检测中</span>
+          </div>
+          <div class="infra-arrow">→</div>
+          <div class="infra-node" id="infra-furnace">
+            <div class="infra-icon">🖥️</div>
+            <div class="infra-name">推理服务</div>
+            <div class="infra-meta" id="infra-furnace-ip">-</div>
+            <span class="badge amber" id="infra-furnace-status">检测中</span>
+          </div>
+          <div class="infra-arrow">→</div>
+          <div class="infra-node" id="infra-db">
+            <div class="infra-icon">🗄️</div>
+            <div class="infra-name">PostgreSQL</div>
+            <div class="infra-meta" id="infra-db-ip">-</div>
+            <span class="badge amber" id="infra-db-status">检测中</span>
+          </div>
+        </div>
+      </div>
+
       <div class="register-layout">
 
-        <!-- 注册表单 -->
+        <!-- 注册/编辑表单 -->
         <div class="card">
-          <div class="card-title">注册 / 更新设备</div>
+          <div class="card-title" id="dev-form-title">注册设备</div>
+
+          <!-- 自动发现 -->
+          <div style="margin-bottom:12px">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:6px">从通信记录发现</div>
+            <select id="dev-discovered" onchange="fillDiscovered(this.value)" style="width:100%;height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px">
+              <option value="">选择已发现设备...</option>
+            </select>
+          </div>
+
           <div class="col" style="gap:10px">
-            <input type="text" id="dev-mac"   placeholder="MAC 地址，如 E8:F6:0A:8C:F4:44">
-            <input type="text" id="dev-name"  placeholder="设备名，如 desk-cam-01">
-            <input type="text" id="dev-ip"    placeholder="IP 地址，如 192.168.50.87">
-            <input type="text" id="dev-loc"   placeholder="位置，如 study-desk">
-            <input type="text" id="dev-url"   placeholder="流地址（摄像头填写），如 http://192.168.50.87:81/">
-            <input type="text" id="dev-desc"  placeholder="设备介绍（可选）">
-            <button class="btn" onclick="registerDevice()">＋ 注册 / 更新</button>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">MAC 地址</div>
+              <input type="text" id="dev-mac" placeholder="自动填入或手动输入" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">IP 地址</div>
+              <input type="text" id="dev-ip" placeholder="自动填入" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">设备名 *</div>
+              <input type="text" id="dev-name" placeholder="如 desk-cam-01" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">位置</div>
+              <input type="text" id="dev-loc" placeholder="如 study-desk" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">流地址（摄像头）</div>
+              <input type="text" id="dev-url" placeholder="如 http://192.168.50.87:81/" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">设备介绍</div>
+              <input type="text" id="dev-desc" placeholder="可选" style="width:100%">
+            </div>
+            <div class="row" style="gap:8px">
+              <button class="btn" style="flex:1" onclick="registerDevice()">保存</button>
+              <button class="btn" onclick="clearDevForm()" style="color:var(--text3)">清空</button>
+            </div>
             <div id="dev-register-result" style="font-size:11px;color:var(--text3)"></div>
           </div>
         </div>
@@ -326,6 +384,6 @@
 
 <div id="toast"></div>
 
-<script src="/ui/app.js?v=20260408f"></script>
+<script src="/ui/app.js?v=20260408g"></script>
 </body>
 </html>

@@ -494,7 +494,79 @@ async function registerFace() {
 // ══════════════════════════════════════════════════════════════
 // DEVICES 页
 // ══════════════════════════════════════════════════════════════
+let _editingMac = null;  // null = new device, string = editing existing
+
 async function initDevices() {
+  pingInfra();
+  loadDiscovered();
+  loadDeviceList();
+}
+
+async function pingInfra() {
+  // Furnace inference service
+  try {
+    const r = await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
+    const d = await r.json();
+    setInfraStatus('furnace', 'online', new URL(API).hostname);
+    setInfraStatus('db', d.status === 'ok' ? 'online' : 'offline', d.db_host || '-');
+  } catch {
+    setInfraStatus('furnace', 'offline', new URL(API).hostname);
+    setInfraStatus('db', 'offline', '-');
+  }
+  // ESP32 cam via stream health
+  try {
+    const r = await fetch(API + '/stream/health', { signal: AbortSignal.timeout(3000) });
+    const d = await r.json();
+    const sc = await fetch(API + '/stream/config', { signal: AbortSignal.timeout(3000) });
+    const sd = await sc.json();
+    const camIp = sd.source ? new URL(sd.source).hostname : '-';
+    setInfraStatus('cam', d.online ? 'online' : 'offline', camIp);
+  } catch {
+    setInfraStatus('cam', 'offline', '-');
+  }
+}
+
+function setInfraStatus(node, status, ip) {
+  const s = document.getElementById('infra-' + node + '-status');
+  const m = document.getElementById('infra-' + node + '-ip');
+  if (s) {
+    s.textContent = status === 'online' ? '在线' : '离线';
+    s.className = 'badge ' + (status === 'online' ? 'green' : 'red');
+  }
+  if (m && ip) m.textContent = ip;
+}
+
+async function loadDiscovered() {
+  const sel = document.getElementById('dev-discovered');
+  try {
+    const r = await fetch(API + '/devices/discovered');
+    const data = await r.json();
+    const items = data.discovered || [];
+    sel.innerHTML = '<option value="">选择已发现设备...</option>';
+    items.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = JSON.stringify(d);
+      const label = (d.device_name || d.mac) + ' · ' + (d.ip || '-') +
+                    (d.is_registered ? ' ✓' : ' 未注册');
+      opt.textContent = label;
+      sel.appendChild(opt);
+    });
+  } catch { sel.innerHTML = '<option value="">发现失败</option>'; }
+}
+
+function fillDiscovered(val) {
+  if (!val) return;
+  const d = JSON.parse(val);
+  document.getElementById('dev-mac').value  = d.mac || '';
+  document.getElementById('dev-ip').value   = d.ip  || '';
+  // If already registered, switch to edit mode
+  if (d.is_registered && d.device_name) {
+    // Find in table and trigger edit
+    editDevice(d.mac);
+  }
+}
+
+async function loadDeviceList() {
   const tbody = document.getElementById('devices-tbody');
   tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>';
   try {
@@ -509,25 +581,27 @@ async function initDevices() {
     tbody.innerHTML = '';
     devices.forEach(d => {
       const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.onclick = () => editDevice(d.mac);
       const tdName = document.createElement('td');
       tdName.style.fontWeight = '700';
       tdName.textContent = d.name;
-      const tdMac  = document.createElement('td');
+      const tdMac = document.createElement('td');
       tdMac.style.cssText = 'font-size:11px;color:var(--text2)';
       tdMac.textContent = d.mac || '-';
-      const tdIp   = document.createElement('td');
+      const tdIp = document.createElement('td');
       tdIp.textContent = d.ip || '-';
-      const tdLoc  = document.createElement('td');
+      const tdLoc = document.createElement('td');
       tdLoc.textContent = d.location || '-';
       const tdDesc = document.createElement('td');
       tdDesc.style.cssText = 'font-size:11px;color:var(--text3)';
       tdDesc.textContent = d.description || '-';
-      const tdDel  = document.createElement('td');
+      const tdDel = document.createElement('td');
       const delBtn = document.createElement('button');
       delBtn.className = 'btn';
       delBtn.style.cssText = 'padding:2px 8px;font-size:11px';
       delBtn.textContent = '删除';
-      delBtn.onclick = () => deleteDevice(d.mac);
+      delBtn.onclick = (e) => { e.stopPropagation(); deleteDevice(d.mac); };
       tdDel.appendChild(delBtn);
       tr.append(tdName, tdMac, tdIp, tdLoc, tdDesc, tdDel);
       tbody.appendChild(tr);
@@ -535,6 +609,42 @@ async function initDevices() {
   } catch {
     tbody.innerHTML = '<tr><td colspan="6" style="color:var(--red)">加载失败</td></tr>';
   }
+}
+
+async function editDevice(mac) {
+  // Fetch device details from list
+  try {
+    const r = await fetch(API + '/devices');
+    const data = await r.json();
+    const d = (data.devices || []).find(x => x.mac === mac);
+    if (!d) return;
+    _editingMac = mac;
+    document.getElementById('dev-form-title').textContent = '编辑设备';
+    document.getElementById('dev-mac').value  = d.mac || '';
+    document.getElementById('dev-mac').readOnly = true;
+    document.getElementById('dev-mac').style.color = 'var(--text3)';
+    document.getElementById('dev-ip').value   = d.ip || '';
+    document.getElementById('dev-ip').readOnly = true;
+    document.getElementById('dev-ip').style.color = 'var(--text3)';
+    document.getElementById('dev-name').value = d.name || '';
+    document.getElementById('dev-loc').value  = d.location || '';
+    document.getElementById('dev-url').value  = d.stream_url || '';
+    document.getElementById('dev-desc').value = d.description || '';
+    document.getElementById('dev-register-result').textContent = '';
+  } catch { toast('加载设备信息失败', 'err'); }
+}
+
+function clearDevForm() {
+  _editingMac = null;
+  document.getElementById('dev-form-title').textContent = '注册设备';
+  ['dev-mac','dev-ip','dev-name','dev-loc','dev-url','dev-desc'].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = '';
+    el.readOnly = false;
+    el.style.color = '';
+  });
+  document.getElementById('dev-register-result').textContent = '';
+  document.getElementById('dev-discovered').value = '';
 }
 
 async function registerDevice() {
@@ -545,27 +655,35 @@ async function registerDevice() {
   const url  = document.getElementById('dev-url').value.trim();
   const desc = document.getElementById('dev-desc').value.trim();
   const result = document.getElementById('dev-register-result');
-  if (!mac || !name) { toast('MAC 和设备名为必填项', 'err'); return; }
-  result.textContent = '注册中...';
-  try {
-    const r = await fetch(API + '/devices', {
+  if (!name) { toast('设备名为必填项', 'err'); return; }
+  result.textContent = '保存中...';
+
+  let r;
+  if (_editingMac) {
+    // Update existing
+    r = await fetch(API + '/devices/' + encodeURIComponent(_editingMac), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null }),
+    });
+  } else {
+    if (!mac) { toast('MAC 地址为必填项', 'err'); return; }
+    r = await fetch(API + '/devices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mac, name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null }),
     });
-    const d = await r.json();
-    if (r.ok) {
-      toast('设备已注册', 'ok');
-      result.textContent = '✓ ' + d.name + ' 注册成功';
-      result.style.color = 'var(--green)';
-      ['dev-mac','dev-name','dev-ip','dev-loc','dev-url','dev-desc'].forEach(id => document.getElementById(id).value = '');
-      initDevices();
-    } else {
-      result.textContent = '✗ ' + (d.detail || '注册失败');
-      result.style.color = 'var(--red)';
-    }
-  } catch(e) {
-    result.textContent = '✗ ' + e.message;
+  }
+  const d = await r.json();
+  if (r.ok) {
+    toast(_editingMac ? '设备已更新' : '设备已注册', 'ok');
+    result.textContent = '✓ ' + (d.name || name);
+    result.style.color = 'var(--green)';
+    clearDevForm();
+    loadDeviceList();
+    loadDiscovered();
+  } else {
+    result.textContent = '✗ ' + (d.detail || '失败');
     result.style.color = 'var(--red)';
   }
 }
@@ -574,7 +692,7 @@ async function deleteDevice(mac) {
   if (!confirm(`确认删除设备 ${mac}？`)) return;
   try {
     const r = await fetch(API + '/devices/' + encodeURIComponent(mac), { method: 'DELETE' });
-    if (r.ok) { toast('设备已删除', 'ok'); initDevices(); }
+    if (r.ok) { toast('设备已删除', 'ok'); clearDevForm(); loadDeviceList(); }
     else toast('删除失败', 'err');
   } catch { toast('删除失败', 'err'); }
 }

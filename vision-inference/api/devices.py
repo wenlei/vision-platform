@@ -111,6 +111,32 @@ def update_device(mac: str, body: DeviceUpdate):
     return _row_to_dict(row)
 
 
+@router.get("/discovered")
+def discovered_devices():
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute("""
+                SELECT vl.device_mac, vl.camera_ip,
+                       MAX(vl.captured_at) as last_seen,
+                       d.name as device_name,
+                       d.id IS NOT NULL as is_registered
+                FROM vision_log vl
+                LEFT JOIN devices d ON d.mac = vl.device_mac
+                WHERE vl.device_mac IS NOT NULL
+                  AND vl.captured_at > NOW() - INTERVAL '7 days'
+                GROUP BY vl.device_mac, vl.camera_ip, d.name, d.id
+                ORDER BY last_seen DESC
+            """)
+            rows = cur.fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"DB error: {e}")
+    return {"discovered": [
+        {"mac": r[0], "ip": r[1], "last_seen": r[2].isoformat() if r[2] else None,
+         "device_name": r[3], "is_registered": bool(r[4])}
+        for r in rows
+    ]}
+
+
 @router.delete("/{mac}")
 def delete_device(mac: str):
     """删除设备。"""

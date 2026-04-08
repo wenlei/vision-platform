@@ -477,6 +477,37 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); }
 .device-name { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
 .device-meta { font-size: 11px; color: var(--text3); }
 
+/* ── 基础设施拓扑图 ──────────────────────────────────────────── */
+.infra-topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+
+.infra-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg3);
+  min-width: 100px;
+}
+
+.infra-icon { font-size: 22px; }
+.infra-name { font-size: 11px; font-weight: 700; color: var(--text); }
+.infra-meta { font-size: 10px; color: var(--text3); }
+
+.infra-arrow {
+  color: var(--text3);
+  font-size: 18px;
+  padding: 0 4px;
+}
+
 /* ══════════════════════════════════════════════════════════════
    PAGE: SYSTEM
 ══════════════════════════════════════════════════════════════ */
