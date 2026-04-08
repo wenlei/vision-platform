@@ -183,17 +183,30 @@ async def stream_default():
 
 @router.get("/capture")
 async def capture_frame():
-    """Single raw JPEG frame from ESP32 /capture (full resolution, for detection/faces)."""
+    """
+    Single JPEG frame for detection/faces.
+
+    When the MJPEG broadcaster is active, waits for the NEXT fresh frame
+    (not the stale latest_frame) to avoid motion blur from a cached frame.
+    Falls back to ESP32 /capture only when no broadcaster is running.
+    """
+    bc = _get_broadcaster()
+    if bc._task and not bc._task.done():
+        # Broadcaster is active — wait for a fresh frame
+        current_id = bc._frame_id
+        for _ in range(50):            # up to 0.5 s
+            await asyncio.sleep(0.01)
+            if bc._frame_id != current_id:
+                break
+        if bc.latest_frame:
+            return StreamingResponse(io.BytesIO(bc.latest_frame), media_type="image/jpeg")
+    # No broadcaster — call ESP32 directly
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(8.0)) as client:
             r = await client.get(_esp32_base_url() + "/capture")
             if r.status_code != 200:
                 log.warning("ESP32 /capture returned %s", r.status_code)
                 raise HTTPException(status_code=502, detail=f"ESP32 capture returned {r.status_code}")
-            ct = r.headers.get("content-type", "")
-            if "jpeg" not in ct and "image" not in ct:
-                log.warning("ESP32 /capture bad content-type: %s, body[:80]: %s", ct, r.content[:80])
-                raise HTTPException(status_code=502, detail=f"ESP32 capture bad content-type: {ct}")
             return StreamingResponse(io.BytesIO(r.content), media_type="image/jpeg")
     except HTTPException:
         raise
