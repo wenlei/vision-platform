@@ -596,14 +596,7 @@ async function loadDeviceList() {
       const tdDesc = document.createElement('td');
       tdDesc.style.cssText = 'font-size:11px;color:var(--text3)';
       tdDesc.textContent = d.description || '-';
-      const tdDel = document.createElement('td');
-      const delBtn = document.createElement('button');
-      delBtn.className = 'btn';
-      delBtn.style.cssText = 'padding:2px 8px;font-size:11px';
-      delBtn.textContent = '删除';
-      delBtn.onclick = (e) => { e.stopPropagation(); deleteDevice(d.mac); };
-      tdDel.appendChild(delBtn);
-      tr.append(tdName, tdMac, tdIp, tdLoc, tdDesc, tdDel);
+      tr.append(tdName, tdMac, tdIp, tdLoc, tdDesc);
       tbody.appendChild(tr);
     });
   } catch {
@@ -620,6 +613,7 @@ async function editDevice(mac) {
     if (!d) return;
     _editingMac = mac;
     document.getElementById('dev-form-title').textContent = '编辑设备';
+    document.getElementById('dev-delete-btn').style.display = '';
     document.getElementById('dev-mac').value  = d.mac || '';
     document.getElementById('dev-mac').readOnly = true;
     document.getElementById('dev-mac').style.color = 'var(--text3)';
@@ -637,6 +631,7 @@ async function editDevice(mac) {
 function clearDevForm() {
   _editingMac = null;
   document.getElementById('dev-form-title').textContent = '注册设备';
+  document.getElementById('dev-delete-btn').style.display = 'none';
   ['dev-mac','dev-ip','dev-name','dev-loc','dev-url','dev-desc'].forEach(id => {
     const el = document.getElementById(id);
     el.value = '';
@@ -689,12 +684,16 @@ async function registerDevice() {
 }
 
 async function deleteDevice(mac) {
-  if (!confirm(`确认删除设备 ${mac}？`)) return;
+  if (!confirm(`确认删除设备 ${mac}？删除后可通过发现记录重新注册。`)) return;
   try {
     const r = await fetch(API + '/devices/' + encodeURIComponent(mac), { method: 'DELETE' });
     if (r.ok) { toast('设备已删除', 'ok'); clearDevForm(); loadDeviceList(); }
     else toast('删除失败', 'err');
   } catch { toast('删除失败', 'err'); }
+}
+
+function deleteCurrentDevice() {
+  if (_editingMac) deleteDevice(_editingMac);
 }
 
 async function pingDevices() { initDevices(); }

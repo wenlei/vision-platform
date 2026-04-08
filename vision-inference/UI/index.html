@@ -285,6 +285,7 @@
             <div class="row" style="gap:8px">
               <button class="btn" style="flex:1" onclick="registerDevice()">保存</button>
               <button class="btn" onclick="clearDevForm()" style="color:var(--text3)">清空</button>
+              <button class="btn" id="dev-delete-btn" onclick="deleteCurrentDevice()" style="display:none;color:var(--red);border-color:var(--red)">删除</button>
             </div>
             <div id="dev-register-result" style="font-size:11px;color:var(--text3)"></div>
           </div>
@@ -295,10 +296,10 @@
           <div class="card-title">已注册设备 <span id="devices-count" style="color:var(--text3)"></span></div>
           <table class="list-table" id="devices-table">
             <thead><tr>
-              <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>介绍</th><th></th>
+              <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>介绍</th>
             </tr></thead>
             <tbody id="devices-tbody">
-              <tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>
+              <tr><td colspan="5" style="color:var(--text3)">加载中...</td></tr>
             </tbody>
           </table>
         </div>
@@ -384,6 +385,6 @@
 
 <div id="toast"></div>
 
-<script src="/ui/app.js?v=20260408g"></script>
+<script src="/ui/app.js?v=20260408h"></script>
 </body>
 </html>
