@@ -19,11 +19,18 @@ router = APIRouter(prefix="/devices", tags=["devices"])
 
 
 def _row_to_dict(r):
+    ip = r[3]
+    # Derive IP from stream_url if ip column is empty
+    if not ip and r[5]:
+        try:
+            ip = r[5].split("//")[-1].split(":")[0].split("/")[0]
+        except Exception:
+            pass
     return {
         "mac":          r[0],
         "name":         r[1],
         "location":     r[2],
-        "ip":           r[3],
+        "ip":           ip,
         "description":  r[4],
         "stream_url":   r[5],
         "registered_at": r[6].isoformat() if r[6] else None,
