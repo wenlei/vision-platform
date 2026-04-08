@@ -99,7 +99,7 @@ function initStream() {
   img.style.display = '';
   streaming = true;
   document.getElementById('btn-stream').textContent = '⏹ 断开';
-  document.getElementById('btn-stream').classList.add('danger');
+  document.getElementById('btn-stream').className = 'btn connected';
   loadOrientConfig();
   loadDeviceSelect();
 }
@@ -113,7 +113,7 @@ function stopStream() {
   document.getElementById('stream-offline').style.display = 'flex';
   document.getElementById('live-dot').classList.remove('active');
   document.getElementById('btn-stream').textContent = '▶ 连接';
-  document.getElementById('btn-stream').classList.remove('danger');
+  document.getElementById('btn-stream').className = 'btn disconnected';
 }
 
 function toggleStream() {

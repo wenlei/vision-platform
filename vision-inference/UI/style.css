@@ -158,7 +158,9 @@ main {
 .btn:hover { border-color: var(--border2); background: #222; }
 .btn.primary { border-color: var(--border2); color: var(--text); }
 .btn.primary:hover { background: #222; }
-.btn.danger { border-color: var(--border2); color: var(--text); }
+.btn.danger  { border-color: var(--border2); color: var(--text); }
+.btn.connected    { border-color: var(--red);   color: var(--red); }
+.btn.disconnected { border-color: var(--green); color: var(--green); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .badge {
