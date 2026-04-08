@@ -188,11 +188,17 @@ async def capture_frame():
         async with httpx.AsyncClient(timeout=httpx.Timeout(8.0)) as client:
             r = await client.get(_esp32_base_url() + "/capture")
             if r.status_code != 200:
+                log.warning("ESP32 /capture returned %s", r.status_code)
                 raise HTTPException(status_code=502, detail=f"ESP32 capture returned {r.status_code}")
+            ct = r.headers.get("content-type", "")
+            if "jpeg" not in ct and "image" not in ct:
+                log.warning("ESP32 /capture bad content-type: %s, body[:80]: %s", ct, r.content[:80])
+                raise HTTPException(status_code=502, detail=f"ESP32 capture bad content-type: {ct}")
             return StreamingResponse(io.BytesIO(r.content), media_type="image/jpeg")
     except HTTPException:
         raise
     except Exception as e:
+        log.warning("ESP32 /capture failed: %s", e)
         raise HTTPException(status_code=502, detail=f"Capture failed: {e}")
 
 

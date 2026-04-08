@@ -51,7 +51,11 @@ async def detect(request: Request,
     tag = get_device_tag(mac)
 
     contents = await file.read()
-    img = Image.open(io.BytesIO(contents)).convert("RGB")
+    try:
+        img = Image.open(io.BytesIO(contents)).convert("RGB")
+    except Exception:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Invalid image: camera capture failed or returned non-image data")
     img = apply_orientation(img)
     img_np = np.array(img)
 
@@ -126,7 +130,11 @@ async def describe(request: Request,
     tag = get_device_tag(mac)
 
     contents = await file.read()
-    img = Image.open(io.BytesIO(contents)).convert("RGB")
+    try:
+        img = Image.open(io.BytesIO(contents)).convert("RGB")
+    except Exception:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Invalid image: camera capture failed or returned non-image data")
     img = apply_orientation(img)
     img_np = np.array(img)
 
