@@ -185,9 +185,13 @@ async def stream_default():
 async def capture_frame():
     """Single raw JPEG frame from ESP32 /capture (full resolution, for detection/faces)."""
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0)) as client:
             r = await client.get(_esp32_base_url() + "/capture")
+            if r.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"ESP32 capture returned {r.status_code}")
             return StreamingResponse(io.BytesIO(r.content), media_type="image/jpeg")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Capture failed: {e}")
 

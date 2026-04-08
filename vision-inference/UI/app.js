@@ -224,7 +224,9 @@ async function triggerDetect() {
   result.innerHTML = '<span style="color:var(--text3)">拍照中...</span>';
   try {
     const capR = await fetch(API + '/stream/capture');
+    if (!capR.ok) { result.textContent = '拍照失败：摄像头离线'; result.style.color = 'var(--red)'; return; }
     const blob = await capR.blob();
+    result.innerHTML = '<span style="color:var(--text3)">识别中...</span>';
     const fd = new FormData();
     fd.append('file', blob, 'capture.jpg');
     const detectR = await fetch(API + '/describe', { method: 'POST', body: fd });
@@ -253,6 +255,7 @@ async function triggerFaceIdentify() {
   result.textContent = '识别中...';
   try {
     const capR = await fetch(API + '/stream/capture');
+    if (!capR.ok) { result.textContent = '拍照失败：摄像头离线'; return; }
     const blob = await capR.blob();
     const fd = new FormData();
     fd.append('file', blob, 'capture.jpg');
