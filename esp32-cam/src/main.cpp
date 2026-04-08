@@ -234,20 +234,8 @@ void handleCapture() {
 // ── MJPEG 流任务（FreeRTOS）──────────────────────────────
 // 在独立任务里处理 MJPEG 流客户端，不阻塞主 loop。
 // 同一时刻只允许一个流客户端。
-TaskHandle_t streamTaskHandle = NULL;
-WiFiClient   activeStreamClient;
+void handleStreamClient(WiFiClient client);  // 前向声明
 
-void streamTask(void* param) {
-    handleStreamClient(activeStreamClient);
-    activeStreamClient.stop();
-    streamTaskHandle = NULL;
-    vTaskDelete(NULL);
-}
-
-
-// ── MJPEG 流任务（FreeRTOS）──────────────────────────────
-// 在独立任务里处理 MJPEG 流客户端，不阻塞主 loop。
-// 同一时刻只允许一个流客户端。
 TaskHandle_t streamTaskHandle = NULL;
 WiFiClient   activeStreamClient;
 
@@ -342,6 +330,9 @@ void setup() {
 
     addLog("Boot reason: %s", getResetReason());
     addLog("Connecting WiFi SSID=%s", ssid);
+
+    // 静态 IP
+    WiFi.config(IPAddress(192,168,50,88), IPAddress(192,168,50,1), IPAddress(255,255,255,0));
 
     // 初始连接，超时 15s 后继续（checkWifi() 在 loop 中持续重试）
     WiFi.begin(ssid, password);
