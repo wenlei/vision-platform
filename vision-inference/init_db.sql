@@ -19,11 +19,15 @@ CREATE TABLE IF NOT EXISTS devices (
     mac           VARCHAR(17)  NOT NULL UNIQUE,  -- MAC 格式：E8:F6:0A:8C:F4:44
     name          VARCHAR(64)  NOT NULL,          -- 设备名，如 desk-cam-01
     location      VARCHAR(128),                   -- 物理位置，如 study-desk
+    ip            VARCHAR(45),                    -- 设备 IP 地址
+    description   TEXT,                           -- 设备介绍
     stream_url    VARCHAR(256),                   -- MJPEG 流地址，如 http://192.168.50.87:81/
     registered_at TIMESTAMP    NOT NULL DEFAULT NOW()
 );
--- 幂等添加 stream_url 列（已有旧表时）
-ALTER TABLE devices ADD COLUMN IF NOT EXISTS stream_url VARCHAR(256);
+-- 幂等添加新列（已有旧表时）
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS stream_url   VARCHAR(256);
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS ip           VARCHAR(45);
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS description  TEXT;
 
 -- -------------------------------------------------------------
 -- vision_log  检测记录表

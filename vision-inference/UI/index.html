@@ -212,21 +212,39 @@
   <div class="page" id="page-devices">
     <div class="page-header">
       <span class="page-title">📡 Devices</span>
-      <button class="btn" onclick="pingDevices()">⚡ Ping All</button>
+      <button class="btn" onclick="initDevices()">↺ 刷新</button>
     </div>
     <div class="page-body">
-      <div id="devices-list">
-        <!-- 自动生成 -->
-      </div>
+      <div class="register-layout">
 
-      <!-- 方向控制（从 Live 页同步） -->
-      <div class="card">
-        <div class="card-title">摄像头传感器方向</div>
-        <div class="row">
-          <button class="btn" id="dev-mirror-btn" onclick="toggleMirror()">⟺ 镜像</button>
-          <button class="btn" id="dev-vflip-btn" onclick="toggleVFlip()">↕ 上下翻转</button>
-          <span id="dev-orient-status" style="color:var(--text3);font-size:11px"></span>
+        <!-- 注册表单 -->
+        <div class="card">
+          <div class="card-title">注册 / 更新设备</div>
+          <div class="col" style="gap:10px">
+            <input type="text" id="dev-mac"   placeholder="MAC 地址，如 E8:F6:0A:8C:F4:44">
+            <input type="text" id="dev-name"  placeholder="设备名，如 desk-cam-01">
+            <input type="text" id="dev-ip"    placeholder="IP 地址，如 192.168.50.87">
+            <input type="text" id="dev-loc"   placeholder="位置，如 study-desk">
+            <input type="text" id="dev-url"   placeholder="流地址（摄像头填写），如 http://192.168.50.87:81/">
+            <input type="text" id="dev-desc"  placeholder="设备介绍（可选）">
+            <button class="btn" onclick="registerDevice()">＋ 注册 / 更新</button>
+            <div id="dev-register-result" style="font-size:11px;color:var(--text3)"></div>
+          </div>
         </div>
+
+        <!-- 已注册设备列表 -->
+        <div class="card" style="overflow:auto">
+          <div class="card-title">已注册设备 <span id="devices-count" style="color:var(--text3)"></span></div>
+          <table class="list-table" id="devices-table">
+            <thead><tr>
+              <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>介绍</th><th></th>
+            </tr></thead>
+            <tbody id="devices-tbody">
+              <tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
       </div>
     </div>
   </div>
@@ -308,6 +326,6 @@
 
 <div id="toast"></div>
 
-<script src="/ui/app.js?v=20260408e"></script>
+<script src="/ui/app.js?v=20260408f"></script>
 </body>
 </html>

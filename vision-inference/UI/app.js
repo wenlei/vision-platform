@@ -197,18 +197,6 @@ function onStreamError() {
 function updateOrientBtns() {
   document.getElementById('btn-mirror').classList.toggle('primary', hmirror === 1);
   document.getElementById('btn-vflip').classList.toggle('primary', vflip === 1);
-  const dm = document.getElementById('dev-mirror-btn');
-  const dv = document.getElementById('dev-vflip-btn');
-  if (dm) dm.classList.toggle('primary', hmirror === 1);
-  if (dv) dv.classList.toggle('primary', vflip === 1);
-  const ds = document.getElementById('dev-orient-status');
-  if (ds) {
-    const parts = [];
-    if (hmirror) parts.push('水平镜像');
-    if (vflip)   parts.push('上下翻转');
-    if (rotate)  parts.push(`旋转${rotate}°`);
-    ds.textContent = parts.length ? parts.join(' · ') : '默认方向';
-  }
 }
 
 async function sendOrientConfig(update) {
@@ -507,68 +495,92 @@ async function registerFace() {
 // DEVICES 页
 // ══════════════════════════════════════════════════════════════
 async function initDevices() {
-  const list = document.getElementById('devices-list');
-  let dbHost = '-';
+  const tbody = document.getElementById('devices-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>';
   try {
-    const r = await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
-    const d = await r.json();
-    dbHost = d.db_host || '-';
-  } catch {}
-  const apiUrl = new URL(API);
-  let camSource = '-';
-  try {
-    const sc = await fetch(API + '/stream/config', { signal: AbortSignal.timeout(3000) });
-    const sd = await sc.json();
-    if (sd.source) camSource = new URL(sd.source).hostname;
-  } catch {}
-  const devices = [
-    { name: 'desk-cam-01', ip: camSource, role: '摄像头端点', icon: '📷', type: 'esp32' },
-    { name: 'Alchemy Furnace', ip: apiUrl.hostname, role: 'GPU 推理服务', icon: '🖥️', type: 'furnace' },
-    { name: 'PostgreSQL LXC', ip: dbHost, role: '数据库', icon: '🗄️', type: 'db' },
-  ];
-  list.innerHTML = '';
-  devices.forEach(d => {
-    const card = document.createElement('div');
-    card.className = 'device-card';
-    card.id = 'dcard-' + d.type;
-    card.innerHTML = `
-      <div class="device-icon">${d.icon}</div>
-      <div>
-        <div class="device-name">${esc(d.name)}</div>
-        <div class="device-meta">${esc(d.ip)} · ${esc(d.role)}</div>
-      </div>
-      <span class="badge amber" id="dstatus-${esc(d.type)}">检测中</span>`;
-    list.appendChild(card);
-  });
-  pingDevices();
-  updateOrientBtns();
+    const r = await fetch(API + '/devices');
+    const data = await r.json();
+    const devices = data.devices || [];
+    document.getElementById('devices-count').textContent = `(${devices.length})`;
+    if (!devices.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text3)">暂无注册设备</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    devices.forEach(d => {
+      const tr = document.createElement('tr');
+      const tdName = document.createElement('td');
+      tdName.style.fontWeight = '700';
+      tdName.textContent = d.name;
+      const tdMac  = document.createElement('td');
+      tdMac.style.cssText = 'font-size:11px;color:var(--text2)';
+      tdMac.textContent = d.mac || '-';
+      const tdIp   = document.createElement('td');
+      tdIp.textContent = d.ip || '-';
+      const tdLoc  = document.createElement('td');
+      tdLoc.textContent = d.location || '-';
+      const tdDesc = document.createElement('td');
+      tdDesc.style.cssText = 'font-size:11px;color:var(--text3)';
+      tdDesc.textContent = d.description || '-';
+      const tdDel  = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn';
+      delBtn.style.cssText = 'padding:2px 8px;font-size:11px';
+      delBtn.textContent = '删除';
+      delBtn.onclick = () => deleteDevice(d.mac);
+      tdDel.appendChild(delBtn);
+      tr.append(tdName, tdMac, tdIp, tdLoc, tdDesc, tdDel);
+      tbody.appendChild(tr);
+    });
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--red)">加载失败</td></tr>';
+  }
 }
 
-async function pingDevices() {
-  // Ping 推理服务
+async function registerDevice() {
+  const mac  = document.getElementById('dev-mac').value.trim();
+  const name = document.getElementById('dev-name').value.trim();
+  const ip   = document.getElementById('dev-ip').value.trim();
+  const loc  = document.getElementById('dev-loc').value.trim();
+  const url  = document.getElementById('dev-url').value.trim();
+  const desc = document.getElementById('dev-desc').value.trim();
+  const result = document.getElementById('dev-register-result');
+  if (!mac || !name) { toast('MAC 和设备名为必填项', 'err'); return; }
+  result.textContent = '注册中...';
   try {
-    await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
-    setDevStatus('furnace', 'online');
-  } catch { setDevStatus('furnace', 'offline'); }
-  // Ping ESP32 (通过后台代理)
-  try {
-    await fetch(API + '/stream/status', { signal: AbortSignal.timeout(3000) });
-    setDevStatus('esp32', 'online');
-  } catch { setDevStatus('esp32', 'offline'); }
-  // DB 通过推理服务 health 间接判断（若推理服务在线则 DB 可达）
-  try {
-    const r = await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
+    const r = await fetch(API + '/devices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mac, name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null }),
+    });
     const d = await r.json();
-    setDevStatus('db', d.status === 'ok' ? 'online' : 'offline');
-  } catch { setDevStatus('db', 'offline'); }
+    if (r.ok) {
+      toast('设备已注册', 'ok');
+      result.textContent = '✓ ' + d.name + ' 注册成功';
+      result.style.color = 'var(--green)';
+      ['dev-mac','dev-name','dev-ip','dev-loc','dev-url','dev-desc'].forEach(id => document.getElementById(id).value = '');
+      initDevices();
+    } else {
+      result.textContent = '✗ ' + (d.detail || '注册失败');
+      result.style.color = 'var(--red)';
+    }
+  } catch(e) {
+    result.textContent = '✗ ' + e.message;
+    result.style.color = 'var(--red)';
+  }
 }
 
-function setDevStatus(type, status) {
-  const el = document.getElementById('dstatus-' + type);
-  if (!el) return;
-  if (status === 'online') { el.textContent = '在线'; el.className = 'badge green'; }
-  else { el.textContent = '离线'; el.className = 'badge red'; }
+async function deleteDevice(mac) {
+  if (!confirm(`确认删除设备 ${mac}？`)) return;
+  try {
+    const r = await fetch(API + '/devices/' + encodeURIComponent(mac), { method: 'DELETE' });
+    if (r.ok) { toast('设备已删除', 'ok'); initDevices(); }
+    else toast('删除失败', 'err');
+  } catch { toast('删除失败', 'err'); }
 }
+
+async function pingDevices() { initDevices(); }
+function setDevStatus() {}
 
 // ══════════════════════════════════════════════════════════════
 // SYSTEM 页
