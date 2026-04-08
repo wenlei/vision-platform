@@ -642,6 +642,15 @@ function clearDevForm() {
   document.getElementById('dev-discovered').value = '';
 }
 
+function autoFillStreamUrl(ip) {
+  // Only auto-fill when creating a new device and URL is empty
+  if (_editingMac) return;
+  const urlEl = document.getElementById('dev-url');
+  if (ip && !urlEl.value) {
+    urlEl.value = 'http://' + ip + ':81/';
+  }
+}
+
 async function registerDevice() {
   const mac  = document.getElementById('dev-mac').value.trim();
   const name = document.getElementById('dev-name').value.trim();

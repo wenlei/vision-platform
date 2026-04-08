@@ -38,6 +38,22 @@ def _resolve_camera_ip(camera_ip: str) -> str:
     return camera_ip
 
 
+def _resolve_device_mac(ip: str):
+    """Look up device MAC from devices table by IP or stream_url."""
+    if not ip or ip == "unknown":
+        return None
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute(
+                "SELECT mac FROM devices WHERE ip = %s OR stream_url LIKE %s LIMIT 1",
+                (ip, f"%/{ip}%")
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+    except Exception:
+        return None
+
+
 def _search_custom_items(cur, embedding, threshold=0.75):
     """在 custom_items 表中搜索与 CLIP embedding 相似的自定义物品。"""
     cur.execute(
@@ -63,6 +79,8 @@ async def detect(request: Request,
     """
     mac = device_mac or request.headers.get("X-Device-MAC")
     ip = _resolve_camera_ip(camera_ip or request.headers.get("X-Device-IP", "unknown"))
+    if not mac:
+        mac = _resolve_device_mac(ip)
     tag = get_device_tag(mac)
 
     contents = await file.read()
@@ -142,6 +160,9 @@ async def describe(request: Request,
     """
     mac = device_mac or request.headers.get("X-Device-MAC")
     ip = camera_ip or request.headers.get("X-Device-IP", "unknown")
+    ip = _resolve_camera_ip(ip)
+    if not mac:
+        mac = _resolve_device_mac(ip)
     tag = get_device_tag(mac)
 
     contents = await file.read()
