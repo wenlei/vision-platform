@@ -183,10 +183,7 @@ async def stream_default():
 
 @router.get("/capture")
 async def capture_frame():
-    """Single raw JPEG frame from ESP32 (for detection/faces — they apply_orientation)."""
-    bc = _get_broadcaster()
-    if bc.latest_frame:
-        return StreamingResponse(io.BytesIO(bc.latest_frame), media_type="image/jpeg")
+    """Single raw JPEG frame from ESP32 /capture (full resolution, for detection/faces)."""
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
             r = await client.get(_esp32_base_url() + "/capture")
