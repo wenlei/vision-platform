@@ -60,26 +60,23 @@ checkHealth();
 
 // ── Stream health poll ────────────────────────────────────────
 async function pollStreamHealth() {
-  if (!streaming) return;
+  if (!streaming) {
+    document.getElementById('live-dot').classList.remove('active');
+    return;
+  }
   try {
     const r = await fetch(API + '/stream/health', { signal: AbortSignal.timeout(2000) });
     const d = await r.json();
-    const statusEl = document.getElementById('live-status');
-    const offlineEl = document.getElementById('stream-offline');
+    const dot = document.getElementById('live-dot');
     if (d.online) {
-      statusEl.textContent = 'LIVE';
-      statusEl.className = 'badge green';
-      offlineEl.style.display = 'none';
+      dot.classList.add('active');
+      document.getElementById('stream-offline').style.display = 'none';
       document.getElementById('stream-img').style.display = '';
     } else {
-      statusEl.textContent = '信号丢失';
-      statusEl.className = 'badge amber';
+      dot.classList.remove('active');
     }
   } catch {
-    if (streaming) {
-      document.getElementById('live-status').textContent = '离线';
-      document.getElementById('live-status').className = 'badge red';
-    }
+    document.getElementById('live-dot').classList.remove('active');
   }
 }
 setInterval(pollStreamHealth, 2000);
