@@ -40,6 +40,20 @@ try:
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS hmirror     SMALLINT NOT NULL DEFAULT 0")
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS vflip       SMALLINT NOT NULL DEFAULT 0")
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_default  BOOLEAN  NOT NULL DEFAULT FALSE")
+        # vision_log timezone migration
+        cur.execute("""
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='vision_log' AND column_name='captured_at'
+                      AND data_type='timestamp without time zone'
+                ) THEN
+                    ALTER TABLE vision_log
+                        ALTER COLUMN captured_at TYPE TIMESTAMPTZ
+                        USING captured_at AT TIME ZONE 'UTC';
+                END IF;
+            END $$
+        """)
         cur.execute("""CREATE TABLE IF NOT EXISTS detection_groups (
             id          SERIAL PRIMARY KEY,
             name        VARCHAR(64) NOT NULL UNIQUE,

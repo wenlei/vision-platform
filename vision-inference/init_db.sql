@@ -45,7 +45,7 @@ ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_default   BOOLEAN  NOT NULL DEFA
 -- -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS vision_log (
     id          SERIAL PRIMARY KEY,
-    captured_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     camera_ip   VARCHAR(45),           -- 摄像头 IP（ESP32 上报）
     device_mac  VARCHAR(17),           -- 原始 MAC 地址
     device_name VARCHAR(64),           -- 解析后的设备名（来自 devices 表）
