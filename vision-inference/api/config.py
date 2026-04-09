@@ -131,15 +131,6 @@ def face_thresholds():
     )
 
 
-def camera_defaults():
-    """返回摄像头全局默认方向配置。"""
-    return cfg.get('camera', {
-        'default_vflip':      0,
-        'default_hmirror':    0,
-        'default_css_rotate': 0,
-    })
-
-
 def cleanup_config():
     """返回 cleanup 调度配置字典。"""
     return cfg.get('storage', {}).get('cleanup', {

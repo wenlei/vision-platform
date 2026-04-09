@@ -23,55 +23,38 @@ device_layer.py -- 设备抽象层（R3 核心）
 
 import logging
 
-from api.config import camera_defaults
-
 log = logging.getLogger(__name__)
 
 
 def resolve_device(cur, mac):
     """
-    通过 MAC 地址解析完整设备语义信息。
-
-    查询 devices 表获取设备名和位置，合并全局默认方向配置。
-    未注册设备返回 unknown 占位值。
-
-    Args:
-        cur: 数据库游标
-        mac: MAC 地址字符串（如 "E8:F6:0A:8C:F4:44"），可为 None
-
-    Returns:
-        dict: {
-            "mac":        "E8:F6:0A:8C:F4:44",
-            "name":       "desk-cam-01" | None,
-            "location":   "study-desk" | None,
-            "tag":        "F444"（MAC 后6位，文件名用）,
-            "vflip":      0,
-            "hmirror":    0,
-            "css_rotate": 0,
-        }
+    通过 MAC 地址解析完整设备语义信息（名称、位置、方向均从 DB 读取）。
+    未注册设备返回 unknown 占位值，方向默认 0/0/0。
     """
-    cam = camera_defaults()
     info = {
         "mac":        mac,
         "name":       None,
         "location":   None,
         "tag":        get_device_tag(mac),
-        "vflip":      cam.get("default_vflip", 0),
-        "hmirror":    cam.get("default_hmirror", 0),
-        "css_rotate": cam.get("default_css_rotate", 0),
+        "vflip":      0,
+        "hmirror":    0,
+        "css_rotate": 0,
     }
 
     if not mac:
         return info
 
     cur.execute(
-        "SELECT name, location FROM devices WHERE mac = %s",
+        "SELECT name, location, rotate, hmirror, vflip FROM devices WHERE mac = %s",
         (mac.upper(),)
     )
     row = cur.fetchone()
     if row:
-        info["name"] = row[0]
-        info["location"] = row[1]
+        info["name"]       = row[0]
+        info["location"]   = row[1]
+        info["css_rotate"] = int(row[2]) if row[2] else 0
+        info["hmirror"]    = int(row[3]) if row[3] else 0
+        info["vflip"]      = int(row[4]) if row[4] else 0
 
     return info
 

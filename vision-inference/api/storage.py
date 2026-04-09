@@ -18,7 +18,8 @@ import numpy as np
 from PIL import Image, ImageOps
 from datetime import datetime
 
-from api.config import image_dir, storage_mode, camera_defaults
+from api.config import image_dir, storage_mode
+from api.db import get_conn
 
 log = logging.getLogger(__name__)
 
@@ -66,18 +67,24 @@ def save_annotated_file(bgr_array: np.ndarray, device_tag: str) -> str:
     return str(path)
 
 
-def apply_orientation(img_pil: Image.Image) -> Image.Image:
+def apply_orientation(img_pil: Image.Image, device_mac: str = None) -> Image.Image:
     """
-    根据 camera 方向配置矫正图像，顺序匹配 CSS transform 行为。
-
-    CSS: transform: scaleX(-1) scaleY(-1) rotate(Ndeg)
-    CSS 从右往左应用：先 rotate，再 scale。
-    Pillow 必须同样：先 rotate，再 mirror/flip。
+    根据设备方向配置矫正图像（从 DB 按 MAC 查询，无 MAC 或未注册则不做变换）。
     """
-    cam = camera_defaults()
-    rotate = int(cam.get("rotate", 0))
-    hmirror = int(cam.get("hmirror", 0))
-    vflip = int(cam.get("vflip", 0))
+    rotate = hmirror = vflip = 0
+    if device_mac:
+        try:
+            with get_conn() as (conn, cur):
+                cur.execute(
+                    "SELECT rotate, hmirror, vflip FROM devices WHERE mac = %s",
+                    (device_mac.upper(),)
+                )
+                row = cur.fetchone()
+                if row:
+                    rotate, hmirror, vflip = int(row[0]), int(row[1]), int(row[2])
+        except Exception:
+            pass
+    # No MAC or unregistered device → no transform (0/0/0)
 
     if rotate:
         img_pil = img_pil.rotate(-rotate, expand=True)

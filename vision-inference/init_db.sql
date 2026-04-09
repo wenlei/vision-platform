@@ -16,18 +16,26 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS devices (
     id            SERIAL PRIMARY KEY,
-    mac           VARCHAR(17)  NOT NULL UNIQUE,  -- MAC 格式：E8:F6:0A:8C:F4:44
-    name          VARCHAR(64)  NOT NULL,          -- 设备名，如 desk-cam-01
-    location      VARCHAR(128),                   -- 物理位置，如 study-desk
-    ip            VARCHAR(45),                    -- 设备 IP 地址
-    description   TEXT,                           -- 设备介绍
-    stream_url    VARCHAR(256),                   -- MJPEG 流地址，如 http://192.168.50.87:81/
+    mac           VARCHAR(17)  NOT NULL UNIQUE,
+    name          VARCHAR(64)  NOT NULL,
+    location      VARCHAR(128),
+    ip            VARCHAR(45),
+    description   TEXT,
+    stream_url    VARCHAR(256),
+    rotate        SMALLINT     NOT NULL DEFAULT 0,
+    hmirror       SMALLINT     NOT NULL DEFAULT 0,
+    vflip         SMALLINT     NOT NULL DEFAULT 0,
+    is_default    BOOLEAN      NOT NULL DEFAULT FALSE,
     registered_at TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 -- 幂等添加新列（已有旧表时）
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS stream_url   VARCHAR(256);
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS ip           VARCHAR(45);
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS description  TEXT;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS rotate       SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS hmirror      SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS vflip        SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_default   BOOLEAN  NOT NULL DEFAULT FALSE;
 
 -- -------------------------------------------------------------
 -- vision_log  检测记录表
@@ -56,7 +64,22 @@ CREATE INDEX IF NOT EXISTS idx_vision_log_device_mac  ON vision_log (device_mac)
 CREATE INDEX IF NOT EXISTS idx_vision_log_labels      ON vision_log USING GIN (labels);
 
 -- -------------------------------------------------------------
--- custom_items  自定义物品表
+-- detection_groups  检测分组表
+--   用户自定义的摄像头分组，用于指定检测范围。
+--   例如 "mydesk" 包含桌面附近的摄像头，触发时只对该组设备抓帧推理。
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS detection_groups (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(64) NOT NULL UNIQUE,
+    description TEXT,
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS group_devices (
+    group_id   INTEGER     NOT NULL REFERENCES detection_groups(id) ON DELETE CASCADE,
+    device_mac VARCHAR(17) NOT NULL REFERENCES devices(mac)         ON DELETE CASCADE,
+    PRIMARY KEY (group_id, device_mac)
+);
 --   存储用户注册的自定义物品（钥匙、水杯等非 YOLO 标准类别）。
 --   embedding 为 CLIP ViT-B/32 生成的 512 维语义向量，
 --   支持 few-shot 追加样本（滚动平均更新），sample_count 记录样本数。

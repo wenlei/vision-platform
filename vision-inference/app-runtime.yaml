@@ -74,16 +74,11 @@ face:
   threshold_low: 0.40        # 最低识别阈值，建议范围 0.35~0.50
 
 
-# -- 摄像头方向 ------------------------------------------------
-# 服务端 Pillow 逐帧处理，同时用于：
-#   - stream_proxy MJPEG 流
-#   - storage.apply_orientation 保存/推理前的图像矫正
-#
-# 通过 UI System 页或 POST /stream/config 修改，持久化到此文件。
+# -- 摄像头 ----------------------------------------------------
+# source: 默认 MJPEG 流地址。
+#   - 留空或含 ${} 占位符时，系统自动从 DB 读取 is_default=TRUE 的设备。
+#   - 方向配置（rotate/hmirror/vflip）已迁移至 DB devices 表，按设备独立存储。
 camera:
-  rotate: 0                  # 服务端旋转：0 / 90 / 180 / 270（顺时针）
-  hmirror: 0                 # 服务端水平镜像：0/1
-  vflip: 0                   # 服务端垂直翻转：0/1
   source: ${CAM_STREAM_URL}    # ESP32 MJPEG 源流地址（实际值在 .env 中定义）
 
 

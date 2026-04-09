@@ -27,6 +27,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from api.config import cfg, BASE_DIR
+from api.db import get_conn
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/stream", tags=["stream"])
@@ -39,8 +40,24 @@ def _camera_cfg() -> dict:
 _DEFAULT_SOURCE = "http://192.168.50.87:81/"
 
 
-def _esp32_stream_url(mac: str = None) -> str:
-    return _camera_cfg().get("source", _DEFAULT_SOURCE)
+def _esp32_stream_url() -> str:
+    source = _camera_cfg().get("source", "")
+    # If the source is a literal URL (not an unresolved placeholder), use it
+    if source and "${" not in source:
+        return source
+    # Query DB for the device marked as default
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute(
+                "SELECT stream_url FROM devices WHERE is_default = TRUE AND stream_url IS NOT NULL LIMIT 1"
+            )
+            row = cur.fetchone()
+            if row and row[0]:
+                log.info("Using DB default device stream: %s", row[0])
+                return row[0]
+    except Exception as e:
+        log.warning("Failed to query default device from DB: %s", e)
+    return _DEFAULT_SOURCE
 
 
 def _esp32_base_url() -> str:
@@ -221,10 +238,8 @@ async def capture_frame():
 @router.get("/snapshot")
 async def snapshot_frame():
     """Single JPEG frame with transforms applied (for screenshot download)."""
-    cam = _camera_cfg()
-    r = int(cam.get("rotate", 0))
-    h = int(cam.get("hmirror", 0))
-    v = int(cam.get("vflip", 0))
+    source = _esp32_stream_url()
+    r, h, v = _load_device_orient(source)
     # Get raw frame
     bc = _get_broadcaster()
     raw = bc.latest_frame
@@ -261,30 +276,57 @@ def stream_health():
 
 @router.get("/config")
 def get_stream_config():
-    """Return current orientation config."""
-    cam = _camera_cfg()
-    return {
-        "source":  cam.get("source",  _DEFAULT_SOURCE),
-        "rotate":  int(cam.get("rotate",  0)),
-        "hmirror": int(cam.get("hmirror", 0)),
-        "vflip":   int(cam.get("vflip",   0)),
-    }
+    """Return current orientation config. Orientation is per-device, stored in DB."""
+    source = _esp32_stream_url()
+    r, h, v = _load_device_orient(source)
+    return {"source": source, "rotate": r, "hmirror": h, "vflip": v}
+
+
+def _load_device_orient(source: str):
+    """Load rotate/hmirror/vflip for the device matching stream_url from DB."""
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute(
+                "SELECT rotate, hmirror, vflip FROM devices WHERE stream_url = %s LIMIT 1",
+                (source,)
+            )
+            row = cur.fetchone()
+            if row:
+                return int(row[0]), int(row[1]), int(row[2])
+    except Exception as e:
+        log.warning("Failed to load device orient from DB: %s", e)
+    return 0, 0, 0
+
+
+def _save_device_orient(source: str, rotate: int = None, hmirror: int = None, vflip: int = None):
+    """Persist orientation fields to the devices row matching stream_url."""
+    fields = {}
+    if rotate  is not None: fields["rotate"]  = rotate
+    if hmirror is not None: fields["hmirror"] = hmirror
+    if vflip   is not None: fields["vflip"]   = vflip
+    if not fields:
+        return
+    set_clause = ", ".join(f"{k} = %s" for k in fields)
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute(
+                f"UPDATE devices SET {set_clause} WHERE stream_url = %s",
+                list(fields.values()) + [source]
+            )
+    except Exception as e:
+        log.warning("Failed to save device orient to DB: %s", e)
 
 
 class StreamConfigUpdate(BaseModel):
-    rotate:  int = None   # clockwise degrees: 0/90/180/270
-    hmirror: int = None   # horizontal mirror: 0/1
-    vflip:   int = None   # vertical flip: 0/1
-    source:  str = None   # override ESP32 stream URL (optional)
+    rotate:  int = None
+    hmirror: int = None
+    vflip:   int = None
+    source:  str = None
 
 
 @router.post("/config")
 def update_stream_config(body: StreamConfigUpdate):
-    """
-    Update orientation config and persist to app-runtime.yaml.
-    Frontend reads these to apply CSS transforms.
-    Backend reads these in apply_orientation() when saving/detecting.
-    """
+    """Update orientation (saved per-device in DB) and/or stream source."""
     if body.rotate is not None and body.rotate not in (0, 90, 180, 270):
         raise HTTPException(status_code=400, detail="rotate must be 0, 90, 180, or 270")
     if body.hmirror is not None and body.hmirror not in (0, 1):
@@ -292,42 +334,31 @@ def update_stream_config(body: StreamConfigUpdate):
     if body.vflip is not None and body.vflip not in (0, 1):
         raise HTTPException(status_code=400, detail="vflip must be 0 or 1")
 
-    runtime_path = BASE_DIR / "app-runtime.yaml"
-    try:
-        with open(runtime_path, encoding="utf-8") as f:
-            raw = yaml.safe_load(f)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read config: {e}")
+    current_source = _esp32_stream_url()
 
-    if "camera" not in raw:
-        raw["camera"] = {}
-
-    changed = {}
-    for field in ("rotate", "hmirror", "vflip", "source"):
-        val = getattr(body, field)
-        if val is not None:
-            raw["camera"][field] = val
-            cfg.setdefault("camera", {})[field] = val
-            changed[field] = val
-
-    if not changed:
-        return get_stream_config()
-
-    # If source changed, reset broadcaster so next request reconnects to new URL
-    if "source" in changed:
+    # If switching source, persist it to yaml and reset broadcaster
+    if body.source is not None and body.source != current_source:
+        runtime_path = BASE_DIR / "app-runtime.yaml"
+        try:
+            with open(runtime_path, encoding="utf-8") as f:
+                raw = yaml.safe_load(f)
+            raw.setdefault("camera", {})["source"] = body.source
+            cfg.setdefault("camera", {})["source"] = body.source
+            with open(runtime_path, "w", encoding="utf-8") as f:
+                yaml.dump(raw, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to write config: {e}")
         global _broadcaster
         if _broadcaster is not None and _broadcaster._task and not _broadcaster._task.done():
             _broadcaster._task.cancel()
         _broadcaster = None
-        log.info("Broadcaster reset for new source: %s", changed["source"])
+        log.info("Broadcaster reset for new source: %s", body.source)
+        current_source = body.source
 
-    try:
-        with open(runtime_path, "w", encoding="utf-8") as f:
-            yaml.dump(raw, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to write config: {e}")
-
-    log.info("Stream config updated: %s", changed)
+    # Persist orientation to DB for this device
+    _save_device_orient(current_source, body.rotate, body.hmirror, body.vflip)
+    log.info("Stream config updated: source=%s rotate=%s hmirror=%s vflip=%s",
+             current_source, body.rotate, body.hmirror, body.vflip)
     return get_stream_config()
 
 

@@ -50,13 +50,18 @@
     <div class="page-header">
       <span class="page-title">📷 Live Preview</span>
       <div class="row">
-        <select id="device-select" onchange="switchDevice(this.value)" style="height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px">
-          <option value="">设备加载中...</option>
-        </select>
         <button class="btn" id="btn-stream" onclick="toggleStream()">⏹ 断开</button>
-        <button class="btn" onclick="triggerDetect()">⚡ 检测</button>
+        <select id="detect-scope" title="检测范围" style="height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px">
+          <option value="current">📷 当前摄像头</option>
+          <option value="all">🌐 全部设备</option>
+        </select>
+        <button class="btn" onclick="triggerScopedDetect()">⚡ 检测</button>
         <button class="btn" onclick="screenshot()">💾 截屏</button>
       </div>
+    </div>
+    <!-- 摄像头切换条 -->
+    <div class="cam-bar" id="cam-bar">
+      <span style="color:var(--text3);font-size:11px">加载设备...</span>
     </div>
     <div class="page-body">
       <div class="stream-area" id="stream-area">
@@ -220,13 +225,9 @@
       <div class="card">
         <div class="card-title">基础设施</div>
         <div class="infra-topo">
-          <div class="infra-node" id="infra-cam">
-            <div class="infra-icon">📷</div>
-            <div class="infra-name">ESP32-CAM</div>
-            <div class="infra-meta" id="infra-cam-ip">-</div>
-            <span class="badge amber" id="infra-cam-status">检测中</span>
-          </div>
-          <div class="infra-arrow">→</div>
+          <!-- 动态摄像头节点 -->
+          <div id="infra-cams" style="display:contents"></div>
+          <div class="infra-arrow" id="infra-arrow-to-furnace">→</div>
           <div class="infra-node" id="infra-furnace">
             <div class="infra-icon">🖥️</div>
             <div class="infra-name">推理服务</div>
@@ -249,12 +250,14 @@
         <div class="card">
           <div class="card-title" id="dev-form-title">注册设备</div>
 
-          <!-- 自动发现 -->
+          <!-- 从 IP 扫描 -->
           <div style="margin-bottom:12px">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:6px">从通信记录发现</div>
-            <select id="dev-discovered" onchange="fillDiscovered(this.value)" style="width:100%;height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px">
-              <option value="">选择已发现设备...</option>
-            </select>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:6px">从 IP 地址扫描</div>
+            <div class="row" style="gap:6px">
+              <input type="text" id="scan-ip" placeholder="如 192.168.50.88" style="flex:1;height:32px">
+              <button class="btn" onclick="scanByIP()" style="height:32px;white-space:nowrap">扫描</button>
+            </div>
+            <div id="scan-result" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
           </div>
 
           <div class="col" style="gap:10px">
@@ -288,6 +291,30 @@
               <button class="btn" id="dev-delete-btn" onclick="deleteCurrentDevice()" style="display:none;color:var(--red);border-color:var(--red)">删除</button>
             </div>
             <div id="dev-register-result" style="font-size:11px;color:var(--text3)"></div>
+
+            <!-- 摄像头实时控制（仅编辑已注册设备时显示） -->
+            <div id="dev-cam-ctrl" style="display:none;border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+              <div style="font-size:10px;color:var(--text3);margin-bottom:8px;font-weight:700;letter-spacing:0.05em">摄像头实时控制</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <div style="flex:1;min-width:120px">
+                  <div style="font-size:10px;color:var(--text3);margin-bottom:3px">分辨率</div>
+                  <select id="dev-framesize" style="width:100%;height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px">
+                    <option value="QQVGA">QQVGA 160×120</option>
+                    <option value="QVGA">QVGA 320×240</option>
+                    <option value="VGA" selected>VGA 640×480</option>
+                    <option value="SVGA">SVGA 800×600</option>
+                    <option value="XGA">XGA 1024×768</option>
+                    <option value="HD">HD 1280×720</option>
+                    <option value="SXGA">SXGA 1280×960</option>
+                    <option value="UXGA">UXGA 1600×1200</option>
+                  </select>
+                </div>
+                <button class="btn" onclick="applyCamConfig()" style="height:32px;align-self:flex-end">下发</button>
+                <button class="btn" onclick="fetchCamStatus()" style="height:32px;align-self:flex-end;color:var(--text3)">刷新状态</button>
+              </div>
+              <div id="dev-cam-status" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
+
+            </div>
           </div>
         </div>
 
@@ -296,7 +323,7 @@
           <div class="card-title">已注册设备 <span id="devices-count" style="color:var(--text3)"></span></div>
           <table class="list-table" id="devices-table">
             <thead><tr>
-              <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>介绍</th>
+              <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>介绍</th><th>默认</th>
             </tr></thead>
             <tbody id="devices-tbody">
               <tr><td colspan="5" style="color:var(--text3)">加载中...</td></tr>
@@ -305,6 +332,51 @@
         </div>
 
       </div>
+
+      <!-- 检测分组管理 -->
+      <div class="card" style="margin-top:0">
+        <div class="card-title">检测分组 <span id="groups-count" style="color:var(--text3)"></span></div>
+        <div class="register-layout">
+
+          <!-- 新建/编辑分组表单 -->
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">分组名称 *</div>
+              <input type="text" id="group-name" placeholder="如 mydesk、entryway" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">描述</div>
+              <input type="text" id="group-desc" placeholder="可选" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">包含设备</div>
+              <div id="group-device-list" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;padding:4px 0">
+                <span style="color:var(--text3);font-size:11px">加载中...</span>
+              </div>
+            </div>
+            <div class="row" style="gap:8px">
+              <button class="btn" style="flex:1" onclick="saveGroup()">保存分组</button>
+              <button class="btn" onclick="clearGroupForm()" style="color:var(--text3)">清空</button>
+              <button class="btn" id="group-delete-btn" onclick="deleteCurrentGroup()" style="display:none;color:var(--red);border-color:var(--red)">删除</button>
+            </div>
+            <div id="group-result" style="font-size:11px;color:var(--text3)"></div>
+          </div>
+
+          <!-- 已有分组列表 -->
+          <div style="overflow:auto">
+            <table class="list-table" id="groups-table">
+              <thead><tr>
+                <th>分组名</th><th>设备数</th><th>描述</th>
+              </tr></thead>
+              <tbody id="groups-tbody">
+                <tr><td colspan="3" style="color:var(--text3)">加载中...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -385,6 +457,6 @@
 
 <div id="toast"></div>
 
-<script src="/ui/app.js?v=20260409a"></script>
+<script src="/ui/app.js?v=20260409c"></script>
 </body>
 </html>
