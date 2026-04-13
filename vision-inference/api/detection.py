@@ -351,40 +351,25 @@ async def detect_all():
 @router.post("/detect/group/{group_name}")
 async def detect_group(group_name: str):
     """
-    对指定分组内的所有设备同时抓帧并运行目标检测。
-    响应格式与 /detect/all 相同。
+    对 tag = group_name 的所有设备同时抓帧并运行目标检测。
 
     示例：
-      curl -X POST http://192.168.50.71:8000/detect/group/mydesk
+      curl -X POST http://192.168.50.71:8000/detect/group/desk
     """
     from fastapi import HTTPException
     try:
         with get_conn() as (conn, cur):
             cur.execute(
-                """SELECT d.mac, d.name, d.location, d.ip, d.stream_url
-                   FROM group_devices gd
-                   JOIN devices d ON d.mac = gd.device_mac
-                   JOIN detection_groups g ON g.id = gd.group_id
-                   WHERE g.name = %s AND d.stream_url IS NOT NULL
-                   ORDER BY d.registered_at""",
-                (group_name,)
+                "SELECT mac, name, location, ip, stream_url FROM devices"
+                " WHERE tag LIKE %s AND stream_url IS NOT NULL ORDER BY registered_at",
+                (f'%{group_name}%',)
             )
             rows = cur.fetchall()
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"DB error: {e}")
 
     if not rows:
-        # Check if group exists at all
-        try:
-            with get_conn() as (conn, cur):
-                cur.execute("SELECT 1 FROM detection_groups WHERE name = %s", (group_name,))
-                if not cur.fetchone():
-                    raise HTTPException(status_code=404, detail=f"Group '{group_name}' not found")
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"DB error: {e}")
-        return {"results": [], "count": 0, "group": group_name}
+        raise HTTPException(status_code=404, detail=f"No devices with tag '{group_name}'")
 
     devices = [
         {"mac": r[0], "name": r[1], "location": r[2], "ip": r[3], "stream_url": r[4]}

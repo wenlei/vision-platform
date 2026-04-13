@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS devices (
     hmirror       SMALLINT     NOT NULL DEFAULT 0,
     vflip         SMALLINT     NOT NULL DEFAULT 0,
     is_default    BOOLEAN      NOT NULL DEFAULT FALSE,
+    tag           VARCHAR(64),
     registered_at TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 -- 幂等添加新列（已有旧表时）

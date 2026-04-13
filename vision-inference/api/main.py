@@ -40,6 +40,7 @@ try:
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS hmirror     SMALLINT NOT NULL DEFAULT 0")
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS vflip       SMALLINT NOT NULL DEFAULT 0")
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_default  BOOLEAN  NOT NULL DEFAULT FALSE")
+        cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS tag         VARCHAR(64)")
         # vision_log timezone migration
         cur.execute("""
             DO $$ BEGIN

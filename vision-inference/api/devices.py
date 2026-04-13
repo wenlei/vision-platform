@@ -39,6 +39,7 @@ def _row_to_dict(r):
         "hmirror":      r[8] if len(r) > 8 else 0,
         "vflip":        r[9] if len(r) > 9 else 0,
         "is_default":   bool(r[10]) if len(r) > 10 else False,
+        "tag":          r[11] if len(r) > 11 else None,
     }
 
 
@@ -48,7 +49,7 @@ def list_devices():
     try:
         with get_conn() as (conn, cur):
             cur.execute(
-                "SELECT mac, name, location, ip, description, stream_url, registered_at, rotate, hmirror, vflip, is_default"
+                "SELECT mac, name, location, ip, description, stream_url, registered_at, rotate, hmirror, vflip, is_default, tag"
                 " FROM devices ORDER BY registered_at DESC"
             )
             rows = cur.fetchall()
@@ -64,6 +65,7 @@ class DeviceCreate(BaseModel):
     ip:          Optional[str] = None
     description: Optional[str] = None
     stream_url:  Optional[str] = None
+    tag:         Optional[str] = None
 
 
 @router.post("")
@@ -72,17 +74,18 @@ def register_device(body: DeviceCreate):
     try:
         with get_conn() as (conn, cur):
             cur.execute(
-                """INSERT INTO devices (mac, name, location, ip, description, stream_url)
-                   VALUES (%s, %s, %s, %s, %s, %s)
+                """INSERT INTO devices (mac, name, location, ip, description, stream_url, tag)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (mac) DO UPDATE SET
                      name        = EXCLUDED.name,
                      location    = EXCLUDED.location,
                      ip          = EXCLUDED.ip,
                      description = EXCLUDED.description,
-                     stream_url  = EXCLUDED.stream_url
-                   RETURNING mac, name, location, ip, description, stream_url, registered_at, rotate, hmirror, vflip, is_default""",
+                     stream_url  = EXCLUDED.stream_url,
+                     tag         = EXCLUDED.tag
+                   RETURNING mac, name, location, ip, description, stream_url, registered_at, rotate, hmirror, vflip, is_default, tag""",
                 (body.mac.upper(), body.name, body.location,
-                 body.ip, body.description, body.stream_url)
+                 body.ip, body.description, body.stream_url, body.tag)
             )
             row = cur.fetchone()
     except Exception as e:
@@ -100,6 +103,7 @@ class DeviceUpdate(BaseModel):
     hmirror:     Optional[int] = None
     vflip:       Optional[int] = None
     is_default:  Optional[bool] = None
+    tag:         Optional[str] = None
 
 
 @router.put("/{mac}")
@@ -114,7 +118,7 @@ def update_device(mac: str, body: DeviceUpdate):
         with get_conn() as (conn, cur):
             cur.execute(
                 f"UPDATE devices SET {set_clause} WHERE mac = %s"
-                " RETURNING mac, name, location, ip, description, stream_url, registered_at, rotate, hmirror, vflip, is_default",
+                " RETURNING mac, name, location, ip, description, stream_url, registered_at, rotate, hmirror, vflip, is_default, tag",
                 values
             )
             row = cur.fetchone()

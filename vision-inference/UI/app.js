@@ -28,7 +28,7 @@ function onPageLoad(name) {
   if (name === 'items')   loadItems();
   if (name === 'faces')   loadFaces();
   if (name === 'devices') initDevices();
-  if (name === 'system')  loadHealth();
+  if (name === 'api')     initApiPage();
 }
 
 // ── Toast ────────────────────────────────────────���───────────
@@ -280,18 +280,27 @@ function toggleVFlip()  { sendOrientConfig({ vflip: vflip ? 0 : 1 }); }
 async function populateDetectScope() {
   const sel = document.getElementById('detect-scope');
   if (!sel) return;
-  // Keep first two fixed options
   while (sel.options.length > 2) sel.remove(2);
   try {
-    const r = await fetch(API + '/groups');
-    const { groups = [] } = await r.json();
-    if (groups.length) {
+    const r = await fetch(API + '/devices');
+    const { devices = [] } = await r.json();
+    const tagMap = {};
+    devices.forEach(d => {
+      if (!d.tag) return;
+      const tags = d.tag.split(',').map(t => t.trim()).filter(t => t);
+      tags.forEach(tag => {
+        if (!tagMap[tag]) tagMap[tag] = 0;
+        tagMap[tag]++;
+      });
+    });
+    const tags = Object.keys(tagMap).sort();
+    if (tags.length) {
       const og = document.createElement('optgroup');
-      og.label = '分组';
-      groups.forEach(g => {
+      og.label = 'Tag 分组';
+      tags.forEach(tag => {
         const opt = document.createElement('option');
-        opt.value = 'group:' + g.name;
-        opt.textContent = '📁 ' + g.name + (g.device_count ? ` (${g.device_count})` : '');
+        opt.value = 'group:' + tag;
+        opt.textContent = '🏷 ' + tag + ` (${tagMap[tag]})`;
         og.appendChild(opt);
       });
       sel.appendChild(og);
@@ -634,7 +643,6 @@ async function initDevices() {
   pingInfra();
   loadDiscovered();
   loadDeviceList();
-  loadGroups();
 }
 
 // ── 检测分组 CRUD ─────────────────────────────────────────────
@@ -939,9 +947,14 @@ async function loadDeviceList() {
       tdIp.textContent = d.ip || '-';
       const tdLoc = document.createElement('td');
       tdLoc.textContent = d.location || '-';
-      const tdDesc = document.createElement('td');
-      tdDesc.style.cssText = 'font-size:11px;color:var(--text3)';
-      tdDesc.textContent = d.description || '-';
+      const tdTag = document.createElement('td');
+      tdTag.style.cssText = 'font-size:11px';
+      if (d.tag) {
+        tdTag.innerHTML = `<span style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--text2)">${esc(d.tag)}</span>`;
+      } else {
+        tdTag.style.color = 'var(--text3)';
+        tdTag.textContent = '-';
+      }
       const tdDefault = document.createElement('td');
       tdDefault.style.cssText = 'text-align:center';
       if (d.is_default) {
@@ -954,7 +967,7 @@ async function loadDeviceList() {
         btn.onclick = e => { e.stopPropagation(); setDefaultDevice(d.mac); };
         tdDefault.appendChild(btn);
       }
-      tr.append(tdName, tdMac, tdIp, tdLoc, tdDesc, tdDefault);
+      tr.append(tdName, tdMac, tdIp, tdLoc, tdTag, tdDefault);
       tbody.appendChild(tr);
     });
   } catch {
@@ -994,6 +1007,7 @@ async function editDevice(mac) {
     document.getElementById('dev-loc').value  = d.location || '';
     document.getElementById('dev-url').value  = d.stream_url || '';
     document.getElementById('dev-desc').value = d.description || '';
+    document.getElementById('dev-tag').value  = d.tag || '';
     document.getElementById('dev-register-result').textContent = '';
     // Show cam control panel and fetch live status
     document.getElementById('dev-cam-ctrl').style.display = '';
@@ -1044,7 +1058,7 @@ function clearDevForm() {
   document.getElementById('dev-delete-btn').style.display = 'none';
   document.getElementById('dev-cam-ctrl').style.display = 'none';
   document.getElementById('dev-cam-status').textContent = '';
-  ['dev-mac','dev-ip','dev-name','dev-loc','dev-url','dev-desc'].forEach(id => {
+  ['dev-mac','dev-ip','dev-name','dev-loc','dev-url','dev-desc','dev-tag'].forEach(id => {
     const el = document.getElementById(id);
     el.value = '';
     el.readOnly = false;
@@ -1104,24 +1118,24 @@ async function registerDevice() {
   const loc  = document.getElementById('dev-loc').value.trim();
   const url  = document.getElementById('dev-url').value.trim();
   const desc = document.getElementById('dev-desc').value.trim();
+  const tag  = document.getElementById('dev-tag').value.trim();
   const result = document.getElementById('dev-register-result');
   if (!name) { toast('设备名为必填项', 'err'); return; }
   result.textContent = '保存中...';
 
   let r;
   if (_editingMac) {
-    // Update existing
     r = await fetch(API + '/devices/' + encodeURIComponent(_editingMac), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null }),
+      body: JSON.stringify({ name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null, tag: tag||null }),
     });
   } else {
     if (!mac) { toast('MAC 地址为必填项', 'err'); return; }
     r = await fetch(API + '/devices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mac, name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null }),
+      body: JSON.stringify({ mac, name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null, tag: tag||null }),
     });
   }
   const d = await r.json();
@@ -1155,7 +1169,175 @@ async function pingDevices() { initDevices(); }
 function setDevStatus() {}
 
 // ══════════════════════════════════════════════════════════════
-// SYSTEM 页
+// API 页
+// ══════════════════════════════════════════════════════════════
+async function initApiPage() {
+  loadApiBindings();
+  // populate API address input
+  const inp = document.getElementById('cfg-api');
+  if (inp) inp.value = API;
+}
+
+async function loadApiBindings() {
+  try {
+    const r = await fetch(API + '/devices');
+    const { devices = [] } = await r.json();
+    _renderApiTagsTable(devices);
+    _renderApiDevicesTable(devices);
+  } catch {
+    document.getElementById('api-tags-tbody').innerHTML =
+      '<tr><td colspan="4" style="color:var(--red)">加载失败</td></tr>';
+  }
+}
+
+function _renderApiTagsTable(devices) {
+  const tbody = document.getElementById('api-tags-tbody');
+  // Group by tag (split comma-separated tags)
+  const tagMap = {};
+  devices.forEach(d => {
+    if (!d.tag) return;
+    const tags = d.tag.split(',').map(t => t.trim()).filter(t => t);
+    tags.forEach(tag => {
+      if (!tagMap[tag]) tagMap[tag] = [];
+      tagMap[tag].push(d);
+    });
+  });
+  const tags = Object.keys(tagMap).sort();
+  document.getElementById('api-tags-count').textContent = `(${tags.length})`;
+  if (!tags.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text3)">暂无 Tag — 在 Devices 页为设备设置 Tag</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  tags.forEach(tag => {
+    const devs = tagMap[tag];
+    const tr = document.createElement('tr');
+    const tdTag = document.createElement('td');
+    tdTag.innerHTML = `<span style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-weight:700">${esc(tag)}</span>`;
+    const tdDevs = document.createElement('td');
+    tdDevs.style.cssText = 'font-size:11px';
+    tdDevs.innerHTML = devs.map(d =>
+      `<span style="background:var(--bg2);border-radius:4px;padding:1px 5px;margin-right:4px">${esc(d.name)}</span>`
+    ).join('');
+    const tdEndpoint = document.createElement('td');
+    tdEndpoint.style.cssText = 'font-size:10px;font-family:monospace;color:var(--text2);line-height:1.6';
+    tdEndpoint.innerHTML = `
+      <div>POST /detect/group/${encodeURIComponent(tag)}</div>
+      <div style="color:var(--text3)">POST /describe/group/${encodeURIComponent(tag)}</div>
+      <div style="color:var(--text3)">POST /capture/group/${encodeURIComponent(tag)}</div>
+    `;
+    const tdAction = document.createElement('td');
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn';
+    copyBtn.style.cssText = 'padding:2px 8px;font-size:10px;margin-right:4px';
+    copyBtn.textContent = '复制 detect';
+    copyBtn.onclick = () => { navigator.clipboard.writeText(`${API}/detect/group/${encodeURIComponent(tag)}`); toast('已复制', 'ok', 1200); };
+    const testBtn = document.createElement('button');
+    testBtn.className = 'btn';
+    testBtn.style.cssText = 'padding:2px 8px;font-size:10px';
+    testBtn.textContent = '测试';
+    testBtn.onclick = async () => {
+      testBtn.disabled = true; testBtn.textContent = '...';
+      try {
+        const res = await fetch(`${API}/detect/group/${encodeURIComponent(tag)}`, { method: 'POST' });
+        const d = await res.json();
+        toast(res.ok ? `✓ ${d.count || 0} 台设备` : `✗ ${d.detail || '失败'}`, res.ok ? 'ok' : 'err');
+      } catch { toast('请求失败', 'err'); }
+      testBtn.disabled = false; testBtn.textContent = '测试';
+    };
+    tdAction.append(copyBtn, testBtn);
+    tr.append(tdTag, tdDevs, tdEndpoint, tdAction);
+    tbody.appendChild(tr);
+  });
+}
+
+function _renderApiDevicesTable(devices) {
+  const tbody = document.getElementById('api-devices-tbody');
+  if (!devices.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text3)">暂无注册设备</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  devices.forEach(d => {
+    const endpoint = `POST /detect/${d.mac}`;
+    const tr = document.createElement('tr');
+    const tdName = document.createElement('td');
+    tdName.style.fontWeight = '700';
+    tdName.textContent = d.name;
+    const tdMac = document.createElement('td');
+    tdMac.style.cssText = 'font-size:11px;color:var(--text2);font-family:monospace';
+    tdMac.textContent = d.mac;
+
+    // Editable tag cell
+    const tdTag = document.createElement('td');
+    tdTag.style.cssText = 'font-size:11px;cursor:pointer;min-width:80px';
+    const renderTagDisplay = () => {
+      if (d.tag) {
+        tdTag.innerHTML = d.tag.split(',').map(t => t.trim()).filter(t => t).map(t =>
+          `<span style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin-right:3px">${esc(t)}</span>`
+        ).join('');
+      } else {
+        tdTag.innerHTML = '<span style="color:var(--text3);font-size:10px">+ 添加 tag</span>';
+      }
+    };
+    renderTagDisplay();
+    tdTag.onclick = e => {
+      e.stopPropagation();
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.value = d.tag || '';
+      inp.placeholder = 'desk,kitchen';
+      inp.style.cssText = 'width:100%;height:24px;font-size:11px;padding:0 4px;border:1px solid var(--accent);border-radius:4px;background:var(--bg2);color:var(--text)';
+      tdTag.innerHTML = '';
+      tdTag.appendChild(inp);
+      inp.focus();
+      const save = async () => {
+        const newTag = inp.value.trim() || null;
+        try {
+          const r = await fetch(API + '/devices/' + encodeURIComponent(d.mac), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tag: newTag }),
+          });
+          if (r.ok) { d.tag = newTag; toast('Tag 已保存', 'ok', 1200); }
+        } catch {}
+        renderTagDisplay();
+        loadApiBindings();
+      };
+      inp.onblur = save;
+      inp.onkeydown = e2 => { if (e2.key === 'Enter') { e2.preventDefault(); inp.blur(); } if (e2.key === 'Escape') { renderTagDisplay(); } };
+    };
+
+    const tdEndpoint = document.createElement('td');
+    tdEndpoint.style.cssText = 'font-size:10px;font-family:monospace;color:var(--text2)';
+    tdEndpoint.textContent = endpoint;
+    const tdAction = document.createElement('td');
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn';
+    copyBtn.style.cssText = 'padding:2px 8px;font-size:10px;margin-right:4px';
+    copyBtn.textContent = '复制';
+    copyBtn.onclick = () => { navigator.clipboard.writeText(`${API}/detect/${d.mac}`); toast('已复制', 'ok', 1200); };
+    const testBtn = document.createElement('button');
+    testBtn.className = 'btn';
+    testBtn.style.cssText = 'padding:2px 8px;font-size:10px';
+    testBtn.textContent = '测试';
+    testBtn.onclick = async () => {
+      testBtn.disabled = true; testBtn.textContent = '...';
+      try {
+        const res = await fetch(`${API}/detect/${d.mac}`, { method: 'POST' });
+        const data = await res.json();
+        toast(res.ok ? `✓ ${data.count ?? 0} 个检测结果` : `✗ ${data.detail || '失败'}`, res.ok ? 'ok' : 'err');
+      } catch { toast('请求失败', 'err'); }
+      testBtn.disabled = false; testBtn.textContent = '测试';
+    };
+    tdAction.append(copyBtn, testBtn);
+    tr.append(tdName, tdMac, tdTag, tdEndpoint, tdAction);
+    tbody.appendChild(tr);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// SYSTEM 页（保留旧函数避免报错）
 // ══════════════════════════════════════════════════════════════
 async function loadHealth() {
   const grid = document.getElementById('health-grid');
