@@ -1,65 +1,70 @@
 # Vision Platform UI
 
-桌面摄像头管理前端，用于实时预览、方向调节、物体检测和人脸识别。
+Single-page web app for managing ESP32-S3 cameras, running detections, and browsing results.  
+Served by FastAPI at `/` and `/ui/*` — no build step required.
 
-## 文件结构
+## File Structure
 
 ```
 UI/
-├── index.html        # 主界面（SPA 单页应用）
-├── style.css         # 样式（暗色工业风）
-├── app.js            # 业务逻辑
-└── desk-viewer.html  # 轻量桌面预览器
+├── index.html        Main SPA
+├── style.css         Light theme (Inter font, indigo accent)
+├── app.js            All client-side logic
+└── desk-viewer.html  Lightweight standalone stream viewer
 ```
 
-## 方向控制架构
+## Pages
 
-摄像头画面的方向调节**不在摄像头端（ESP32-CAM）完成**，而是由后台 `stream_proxy` 在服务端处理：
+| Page | Function |
+|------|----------|
+| **Live** | MJPEG stream preview, device switcher, scoped detection (current / all / tag group), face identify, orientation controls |
+| **History** | Detection log grid with label search |
+| **Items** | Register custom objects (CLIP few-shot) |
+| **Faces** | Register and manage face embeddings |
+| **Devices** | ESP32 registration, tag assignment, infrastructure topology |
+| **API** | Endpoint reference, tag ↔ endpoint binding, per-device paths |
 
-```
-ESP32-CAM (原始 MJPEG)
-    │
-    ▼
-stream_proxy (FastAPI + Pillow)
-    ├── rotate   0/90/180/270°
-    ├── hmirror  水平镜像
-    └── vflip    垂直翻转
-    │
-    ▼
-UI 前端显示处理后的画面
-```
+## Detection Scope (Live page)
 
-- **旋转/翻转/镜像** → `POST /stream/config` 修改后台参数，Pillow 逐帧处理 MJPEG 流
-- **CSS 旋转**（顺时针/逆时针按钮）→ 仅作为前端预览辅助，不影响保存和推理
-- 参数调好后，后台按此配置处理所有下游任务（截图保存、YOLO 推理、人脸识别）
+The scope selector controls what `⚡ 检测` triggers:
 
-## 页面说明
+| Selection | Endpoint called |
+|-----------|----------------|
+| 📷 当前摄像头 | `POST /describe` (current stream device) |
+| 🌐 全部设备 | `POST /detect/all` |
+| 🏷 {tag} | `POST /detect/group/{tag}` |
 
-| 页面 | 功能 |
-|------|------|
-| **Live** | MJPEG 实时预览 + 方向控制 + 单帧检测/人脸识别 |
-| **History** | 检测历史记录，按标签搜索 |
-| **Items** | 自定义物品注册（上传图片 + 标签） |
-| **Faces** | 人脸注册与管理 |
-| **Devices** | 设备状态（ESP32、GPU 服务、数据库） |
-| **System** | 服务健康状态、运行配置、API 地址设置 |
+Tag groups are populated dynamically from `GET /devices`.
 
-## 依赖
+## API Page — Tag Bindings
 
-纯前端，无构建步骤。由后台 FastAPI 以静态文件方式挂载：
+Each device carries a `tag` field (comma/semicolon separated). The API page:
 
-```python
-# main.py
-app.mount("/ui", StaticFiles(directory="UI", html=True))
-```
+1. Groups devices by tag
+2. Shows three endpoint chips per tag row — `POST /detect/group/{tag}`, `/describe/group/{tag}`, `/capture/group/{tag}`
+3. Click a chip to enable / disable → saves via `PUT /bindings/{tag}`
 
-## 配置
+Per-device paths support both name and MAC: `POST /detect/desk-cam-01` or `POST /detect/AA:BB:CC:DD:EE:FF`.
 
-前端通过 `localStorage` 持久化两个地址：
+## Orientation
 
-| Key | 默认值 | 说明 |
-|-----|--------|------|
-| `vision_api` | `http://192.168.50.71:8000` | 推理服务 API |
-| `vision_cam` | `http://192.168.50.87` | 摄像头基地址 |
+Stored per-device in `devices` table (`rotate`, `hmirror`, `vflip`).  
+Stream proxy applies orientation server-side — all saved images and inference results use the corrected orientation.  
+Live page controls write directly to the stream config YAML.
 
-可在 System 页面修改，保存后立即生效。
+## Configuration
+
+API address stored in `localStorage`:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `vision_api` | `location.origin` | Inference service base URL |
+
+Editable in the API page → "推理服务地址".
+
+## Design
+
+- **Font**: Inter (Google Fonts) with system-ui fallback
+- **Accent**: Indigo `#6366f1`
+- **Theme**: Light — white cards, `#f5f6fa` page background
+- **Status colours**: Green (online) · Amber (checking) · Red (offline/error)

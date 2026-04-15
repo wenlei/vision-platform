@@ -357,16 +357,19 @@ async def detect_group(group_name: str):
       curl -X POST http://192.168.50.71:8000/detect/group/desk
     """
     from fastapi import HTTPException
+    import re as _re
     try:
         with get_conn() as (conn, cur):
             cur.execute(
-                "SELECT mac, name, location, ip, stream_url FROM devices"
-                " WHERE tag LIKE %s AND stream_url IS NOT NULL ORDER BY registered_at",
-                (f'%{group_name}%',)
+                "SELECT mac, name, location, ip, stream_url, tag FROM devices"
+                " WHERE stream_url IS NOT NULL ORDER BY registered_at",
             )
-            rows = cur.fetchall()
+            all_rows = cur.fetchall()
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"DB error: {e}")
+
+    # Match devices whose tag list (split by , or ;) contains group_name
+    rows = [r for r in all_rows if r[5] and group_name in _re.split(r'[,;]\s*', r[5])]
 
     if not rows:
         raise HTTPException(status_code=404, detail=f"No devices with tag '{group_name}'")
@@ -394,25 +397,27 @@ async def detect_group(group_name: str):
     return {"results": results, "count": len(results), "group": group_name}
 
 
-@router.post("/detect/{mac}")
-async def detect_from_device(mac: str):
+@router.post("/detect/{identifier}")
+async def detect_from_device(identifier: str):
     """
-    按 MAC 从指定设备抓帧并运行完整目标检测，无需上传图片。
-    适合外部服务、脚本、或定时任务直接触发。
+    按 MAC 或设备名从指定设备抓帧并运行完整目标检测。
+    优先匹配 MAC（大写），匹配失败时按设备名（不区分大小写）查找。
 
     示例：
+      curl -X POST http://192.168.50.71:8000/detect/desk-cam-01
       curl -X POST http://192.168.50.71:8000/detect/AA:BB:CC:DD:EE:FF
     """
     from fastapi import HTTPException
     try:
         with get_conn() as (conn, cur):
             cur.execute(
-                "SELECT mac, name, location, ip, stream_url FROM devices WHERE mac = %s",
-                (mac.upper(),)
+                "SELECT mac, name, location, ip, stream_url FROM devices"
+                " WHERE mac = %s OR LOWER(name) = LOWER(%s) LIMIT 1",
+                (identifier.upper(), identifier)
             )
             row = cur.fetchone()
             if not row:
-                raise HTTPException(status_code=404, detail=f"Device {mac} not found")
+                raise HTTPException(status_code=404, detail=f"Device '{identifier}' not found (tried MAC and name)")
     except HTTPException:
         raise
     except Exception as e:
@@ -421,7 +426,7 @@ async def detect_from_device(mac: str):
     device = {"mac": row[0], "name": row[1], "location": row[2], "ip": row[3], "stream_url": row[4]}
     _, jpeg = await _capture_one(device)
     if jpeg is None:
-        raise HTTPException(status_code=502, detail=f"Failed to capture frame from {mac}")
+        raise HTTPException(status_code=502, detail=f"Failed to capture frame from {device['name']}")
 
     result = _run_detect_on_bytes(jpeg, device["mac"], device["ip"] or "")
     if result is None:

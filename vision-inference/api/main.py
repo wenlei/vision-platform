@@ -23,6 +23,7 @@ from api.search import router as search_router
 from api.stream_proxy import router as stream_router
 from api.devices import router as devices_router
 from api.groups import router as groups_router
+from api.bindings import router as bindings_router
 
 app.include_router(health_router)
 app.include_router(detection_router)
@@ -32,6 +33,7 @@ app.include_router(search_router)
 app.include_router(stream_router)
 app.include_router(devices_router)
 app.include_router(groups_router)
+app.include_router(bindings_router)
 
 # ── 自动 migration：按需添加新列 ──────────────────────────────
 try:
@@ -41,6 +43,11 @@ try:
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS vflip       SMALLINT NOT NULL DEFAULT 0")
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_default  BOOLEAN  NOT NULL DEFAULT FALSE")
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS tag         VARCHAR(64)")
+        cur.execute("""CREATE TABLE IF NOT EXISTS tag_endpoints (
+            tag          VARCHAR(64) NOT NULL,
+            endpoint_key VARCHAR(64) NOT NULL,
+            PRIMARY KEY (tag, endpoint_key)
+        )""")
         # vision_log timezone migration
         cur.execute("""
             DO $$ BEGIN

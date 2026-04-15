@@ -922,14 +922,14 @@ function fillDiscovered(val) {
 
 async function loadDeviceList() {
   const tbody = document.getElementById('devices-tbody');
-  tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text3)">加载中...</td></tr>';
   try {
     const r = await fetch(API + '/devices');
     const data = await r.json();
     const devices = data.devices || [];
     document.getElementById('devices-count').textContent = `(${devices.length})`;
     if (!devices.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text3)">暂无注册设备</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text3)">暂无注册设备</td></tr>';
       return;
     }
     tbody.innerHTML = '';
@@ -950,28 +950,19 @@ async function loadDeviceList() {
       const tdTag = document.createElement('td');
       tdTag.style.cssText = 'font-size:11px';
       if (d.tag) {
-        tdTag.innerHTML = `<span style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--text2)">${esc(d.tag)}</span>`;
+        const chips = d.tag.split(/[,;]/).map(t => t.trim()).filter(t => t);
+        tdTag.innerHTML = chips.map(t =>
+          `<span style="display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin-right:3px;color:var(--text2)">${esc(t)}</span>`
+        ).join('');
       } else {
         tdTag.style.color = 'var(--text3)';
         tdTag.textContent = '-';
       }
-      const tdDefault = document.createElement('td');
-      tdDefault.style.cssText = 'text-align:center';
-      if (d.is_default) {
-        tdDefault.innerHTML = '<span style="color:var(--amber)" title="默认设备">★</span>';
-      } else {
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.style.cssText = 'padding:2px 8px;font-size:10px;color:var(--text3)';
-        btn.textContent = '设为默认';
-        btn.onclick = e => { e.stopPropagation(); setDefaultDevice(d.mac); };
-        tdDefault.appendChild(btn);
-      }
-      tr.append(tdName, tdMac, tdIp, tdLoc, tdTag, tdDefault);
+      tr.append(tdName, tdMac, tdIp, tdLoc, tdTag);
       tbody.appendChild(tr);
     });
   } catch {
-    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--red)">加载失败</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--red)">加载失败</td></tr>';
   }
 }
 
@@ -1180,58 +1171,108 @@ async function initApiPage() {
 
 async function loadApiBindings() {
   try {
-    const r = await fetch(API + '/devices');
-    const { devices = [] } = await r.json();
-    _renderApiTagsTable(devices);
+    const [devRes, bindRes] = await Promise.all([
+      fetch(API + '/devices'),
+      fetch(API + '/bindings'),
+    ]);
+    const { devices = [] } = await devRes.json();
+    const bindData = bindRes.ok ? await bindRes.json() : { endpoints: [], bindings: [] };
+    _renderApiTagsTable(devices, bindData);
     _renderApiDevicesTable(devices);
   } catch {
     document.getElementById('api-tags-tbody').innerHTML =
-      '<tr><td colspan="4" style="color:var(--red)">加载失败</td></tr>';
+      '<tr><td colspan="6" style="color:var(--red)">加载失败</td></tr>';
   }
 }
 
-function _renderApiTagsTable(devices) {
+function _renderApiTagsTable(devices, bindData) {
   const tbody = document.getElementById('api-tags-tbody');
-  // Group by tag (split comma-separated tags)
+  const endpoints = bindData.endpoints || [];
+
+  // Map tag → enabled endpoint keys from /bindings
+  const bindMap = {};
+  (bindData.bindings || []).forEach(b => { bindMap[b.tag] = new Set(b.enabled || []); });
+
+  // Group devices by tag (split comma/semicolon)
   const tagMap = {};
   devices.forEach(d => {
     if (!d.tag) return;
-    const tags = d.tag.split(',').map(t => t.trim()).filter(t => t);
+    const tags = d.tag.split(/[,;]/).map(t => t.trim()).filter(t => t);
     tags.forEach(tag => {
       if (!tagMap[tag]) tagMap[tag] = [];
       tagMap[tag].push(d);
     });
   });
   const tags = Object.keys(tagMap).sort();
-  document.getElementById('api-tags-count').textContent = `(${tags.length})`;
+  document.getElementById('api-tags-count').textContent = tags.length ? `${tags.length} 个 Tag` : '';
   if (!tags.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text3)">暂无 Tag — 在 Devices 页为设备设置 Tag</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text3);padding:20px 12px">暂无 Tag — 在 Devices 页为设备设置 Tag</td></tr>';
     return;
   }
   tbody.innerHTML = '';
   tags.forEach(tag => {
     const devs = tagMap[tag];
+    const enabled = bindMap[tag] || new Set();
     const tr = document.createElement('tr');
+
+    // Tag cell
     const tdTag = document.createElement('td');
-    tdTag.innerHTML = `<span style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-weight:700">${esc(tag)}</span>`;
+    tdTag.innerHTML = `<span style="background:var(--accent-bg);color:var(--accent);border:1px solid rgba(99,102,241,0.25);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">${esc(tag)}</span>`;
+
+    // Devices cell
     const tdDevs = document.createElement('td');
-    tdDevs.style.cssText = 'font-size:11px';
     tdDevs.innerHTML = devs.map(d =>
-      `<span style="background:var(--bg2);border-radius:4px;padding:1px 5px;margin-right:4px">${esc(d.name)}</span>`
+      `<span style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 7px;margin-right:4px;font-size:11px;color:var(--text2)">${esc(d.name)}</span>`
     ).join('');
-    const tdEndpoint = document.createElement('td');
-    tdEndpoint.style.cssText = 'font-size:10px;font-family:monospace;color:var(--text2);line-height:1.6';
-    tdEndpoint.innerHTML = `
-      <div>POST /detect/group/${encodeURIComponent(tag)}</div>
-      <div style="color:var(--text3)">POST /describe/group/${encodeURIComponent(tag)}</div>
-      <div style="color:var(--text3)">POST /capture/group/${encodeURIComponent(tag)}</div>
-    `;
+
+    tr.append(tdTag, tdDevs);
+
+    // One cell per endpoint — shows full path as clickable chip
+    endpoints.forEach(ep => {
+      const td = document.createElement('td');
+      const path = ep.path.replace('{tag}', tag);
+      const isOn = enabled.has(ep.key);
+
+      const chip = document.createElement('div');
+      chip.className = 'endpoint-chip' + (isOn ? ' enabled' : '');
+      chip.title = isOn ? '点击禁用' : '点击启用';
+      chip.style.cursor = 'pointer';
+      chip.innerHTML =
+        `<span class="method">${esc(ep.method)}</span>` +
+        `<span>${esc(path)}</span>`;
+
+      chip.onclick = async () => {
+        const nowOn = chip.classList.contains('enabled');
+        const newEnabled = nowOn
+          ? [...enabled].filter(k => k !== ep.key)
+          : [...enabled, ep.key];
+        chip.style.opacity = '0.5';
+        try {
+          const r = await fetch(API + '/bindings/' + encodeURIComponent(tag), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: newEnabled }),
+          });
+          if (r.ok) {
+            if (nowOn) { chip.classList.remove('enabled'); enabled.delete(ep.key); }
+            else        { chip.classList.add('enabled');    enabled.add(ep.key); }
+            toast(`${esc(tag)} · ${nowOn ? '已禁用' : '已启用'} ${ep.key}`, 'ok', 1500);
+          } else toast('保存失败', 'err');
+        } catch { toast('保存失败', 'err'); }
+        chip.style.opacity = '';
+      };
+
+      td.appendChild(chip);
+      tr.appendChild(td);
+    });
+
+    // Action cell
     const tdAction = document.createElement('td');
     const copyBtn = document.createElement('button');
     copyBtn.className = 'btn';
     copyBtn.style.cssText = 'padding:2px 8px;font-size:10px;margin-right:4px';
-    copyBtn.textContent = '复制 detect';
-    copyBtn.onclick = () => { navigator.clipboard.writeText(`${API}/detect/group/${encodeURIComponent(tag)}`); toast('已复制', 'ok', 1200); };
+    copyBtn.textContent = '复制';
+    copyBtn.onclick = () => { navigator.clipboard.writeText(`${API}/detect/group/${encodeURIComponent(tag)}`); toast('已复制 detect 路径', 'ok', 1200); };
     const testBtn = document.createElement('button');
     testBtn.className = 'btn';
     testBtn.style.cssText = 'padding:2px 8px;font-size:10px';
@@ -1246,7 +1287,7 @@ function _renderApiTagsTable(devices) {
       testBtn.disabled = false; testBtn.textContent = '测试';
     };
     tdAction.append(copyBtn, testBtn);
-    tr.append(tdTag, tdDevs, tdEndpoint, tdAction);
+    tr.appendChild(tdAction);
     tbody.appendChild(tr);
   });
 }
@@ -1309,14 +1350,16 @@ function _renderApiDevicesTable(devices) {
     };
 
     const tdEndpoint = document.createElement('td');
-    tdEndpoint.style.cssText = 'font-size:10px;font-family:monospace;color:var(--text2)';
-    tdEndpoint.textContent = endpoint;
+    tdEndpoint.style.cssText = 'line-height:1.8';
+    tdEndpoint.innerHTML =
+      `<span class="endpoint-chip enabled"><span class="method">POST</span>/detect/${esc(d.name)}</span>` +
+      `<br><span style="font-size:10px;color:var(--text3);font-family:monospace;padding-left:2px">或 /detect/${esc(d.mac)}</span>`;
     const tdAction = document.createElement('td');
     const copyBtn = document.createElement('button');
     copyBtn.className = 'btn';
     copyBtn.style.cssText = 'padding:2px 8px;font-size:10px;margin-right:4px';
     copyBtn.textContent = '复制';
-    copyBtn.onclick = () => { navigator.clipboard.writeText(`${API}/detect/${d.mac}`); toast('已复制', 'ok', 1200); };
+    copyBtn.onclick = () => { navigator.clipboard.writeText(`${API}/detect/${d.name}`); toast('已复制', 'ok', 1200); };
     const testBtn = document.createElement('button');
     testBtn.className = 'btn';
     testBtn.style.cssText = 'padding:2px 8px;font-size:10px';
@@ -1324,7 +1367,7 @@ function _renderApiDevicesTable(devices) {
     testBtn.onclick = async () => {
       testBtn.disabled = true; testBtn.textContent = '...';
       try {
-        const res = await fetch(`${API}/detect/${d.mac}`, { method: 'POST' });
+        const res = await fetch(`${API}/detect/${encodeURIComponent(d.name)}`, { method: 'POST' });
         const data = await res.json();
         toast(res.ok ? `✓ ${data.count ?? 0} 个检测结果` : `✗ ${data.detail || '失败'}`, res.ok ? 'ok' : 'err');
       } catch { toast('请求失败', 'err'); }

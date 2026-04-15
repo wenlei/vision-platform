@@ -81,6 +81,12 @@ CREATE TABLE IF NOT EXISTS group_devices (
     device_mac VARCHAR(17) NOT NULL REFERENCES devices(mac)         ON DELETE CASCADE,
     PRIMARY KEY (group_id, device_mac)
 );
+
+CREATE TABLE IF NOT EXISTS tag_endpoints (
+    tag          VARCHAR(64) NOT NULL,
+    endpoint_key VARCHAR(64) NOT NULL,
+    PRIMARY KEY (tag, endpoint_key)
+);
 --   存储用户注册的自定义物品（钥匙、水杯等非 YOLO 标准类别）。
 --   embedding 为 CLIP ViT-B/32 生成的 512 维语义向量，
 --   支持 few-shot 追加样本（滚动平均更新），sample_count 记录样本数。
