@@ -44,8 +44,13 @@ async def register(file: UploadFile = File(...),
             existing = cur.fetchone()
 
             if existing:
-                old_emb = existing[1]
+                old_emb_raw = existing[1]
                 count = existing[2]
+                # pgvector returns embedding as string "[0.1,0.2,...]" or list
+                if isinstance(old_emb_raw, str):
+                    old_emb = [float(x) for x in old_emb_raw.strip("[]").split(",")]
+                else:
+                    old_emb = [float(x) for x in old_emb_raw]
                 avg_emb = [
                     (old_emb[i] * count + embedding[i]) / (count + 1)
                     for i in range(len(embedding))
