@@ -256,7 +256,7 @@ async def list_faces():
         with get_conn() as (conn, cur):
             cur.execute(
                 """SELECT id, name, label, det_score, source_device,
-                          registered_at
+                          registered_at, sample_count
                    FROM faces ORDER BY registered_at DESC"""
             )
             rows = cur.fetchall()
@@ -266,9 +266,28 @@ async def list_faces():
                         "id": r[0], "name": r[1], "label": r[2],
                         "det_score": r[3], "source_device": r[4],
                         "registered_at": r[5].isoformat(),
+                        "sample_count": r[6] or 1,
                     }
                     for r in rows
                 ]
             }
     except Exception as e:
         return {"error": str(e)}
+
+
+@router.delete("/faces/{name}")
+async def delete_face(name: str):
+    """删除已注册人脸（按姓名完全匹配，删除所有同名记录）。"""
+    from fastapi import HTTPException
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute("DELETE FROM faces WHERE name = %s RETURNING name", (name,))
+            rows = cur.fetchall()
+            if not rows:
+                raise HTTPException(status_code=404, detail=f"Face '{name}' not found")
+        return {"status": "ok", "deleted": name, "count": len(rows)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        from fastapi import HTTPException as _HTTPException
+        raise _HTTPException(status_code=500, detail=str(e))

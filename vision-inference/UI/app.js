@@ -724,6 +724,8 @@ function previewFile(input, previewId) {
 // ══════════════════════════════════════════════════════════════
 // FACES 页
 // ══════════════════════════════════════════════════════════════
+let _faceFiles = [];  // accumulated File objects for multi-angle registration
+
 async function loadFaces() {
   try {
     const r = await fetch(API + '/faces');
@@ -732,7 +734,7 @@ async function loadFaces() {
     document.getElementById('faces-count').textContent = `(${faces.length})`;
     const tbody = document.getElementById('faces-tbody');
     if (!faces.length) {
-      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text3)">暂无注册人脸</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text3)">暂无注册人脸</td></tr>';
       return;
     }
     tbody.innerHTML = '';
@@ -742,44 +744,126 @@ async function loadFaces() {
       tdName.style.fontWeight = '700';
       tdName.textContent = f.name;
       const tdCount = document.createElement('td');
-      tdCount.innerHTML = `<span class="badge blue">${f.sample_count || 1}</span>`;
+      tdCount.innerHTML = `<span class="badge blue">${f.sample_count || 1} 张</span>`;
       const tdScore = document.createElement('td');
       tdScore.textContent = f.det_score ? (f.det_score * 100).toFixed(0) + '%' : '-';
       const tdTime = document.createElement('td');
+      tdTime.style.cssText = 'font-size:11px;color:var(--text3)';
       tdTime.textContent = new Date(f.registered_at).toLocaleDateString('zh-CN');
-      tr.append(tdName, tdCount, tdScore, tdTime);
+      const tdAction = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn';
+      delBtn.style.cssText = 'padding:2px 8px;font-size:10px;color:var(--red);border-color:var(--red)';
+      delBtn.textContent = '删除';
+      delBtn.onclick = () => deleteFace(f.name);
+      tdAction.appendChild(delBtn);
+      tr.append(tdName, tdCount, tdScore, tdTime, tdAction);
       tbody.appendChild(tr);
     });
   } catch {
-    document.getElementById('faces-tbody').innerHTML = '<tr><td colspan="4" style="color:var(--red)">加载失败</td></tr>';
+    document.getElementById('faces-tbody').innerHTML = '<tr><td colspan="5" style="color:var(--red)">加载失败</td></tr>';
   }
 }
 
+function addFaceFiles(fileList) {
+  const newFiles = Array.from(fileList);
+  _faceFiles = _faceFiles.concat(newFiles);
+  renderFaceThumbs();
+}
+
+function renderFaceThumbs() {
+  const grid = document.getElementById('face-preview-grid');
+  const thumbs = document.getElementById('face-thumbs');
+  const count = document.getElementById('face-file-count');
+  if (!_faceFiles.length) { grid.style.display = 'none'; return; }
+  grid.style.display = '';
+  count.textContent = _faceFiles.length;
+  thumbs.innerHTML = '';
+  _faceFiles.forEach((f, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;width:72px;height:72px;flex-shrink:0';
+    const img = document.createElement('img');
+    if (img._objUrl) URL.revokeObjectURL(img._objUrl);
+    img._objUrl = URL.createObjectURL(f);
+    img.src = img._objUrl;
+    img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--border)';
+    const del = document.createElement('span');
+    del.textContent = '✕';
+    del.style.cssText = 'position:absolute;top:2px;right:4px;font-size:11px;color:#fff;cursor:pointer;text-shadow:0 0 3px rgba(0,0,0,0.8);line-height:1';
+    del.onclick = () => { _faceFiles.splice(i, 1); renderFaceThumbs(); };
+    wrap.appendChild(img);
+    wrap.appendChild(del);
+    thumbs.appendChild(wrap);
+  });
+}
+
+function clearFaceFiles() {
+  _faceFiles = [];
+  document.getElementById('face-file').value = '';
+  renderFaceThumbs();
+}
+
 async function registerFace() {
-  const file = document.getElementById('face-file').files[0];
   const name = document.getElementById('face-name').value.trim();
   const result = document.getElementById('face-register-result');
-  if (!file || !name) { toast('请选择图片并填写姓名', 'err'); return; }
-  result.textContent = '注册中...';
-  const fd = new FormData();
-  fd.append('file', file);
-  fd.append('name', name);
-  try {
-    const r = await fetch(API + '/face/register', { method: 'POST', body: fd });
-    const data = await r.json();
-    if (data.status === 'ok') {
-      toast(data.message, 'ok');
-      result.textContent = '\u2713 ' + data.message;
-      result.style.color = 'var(--green)';
-      loadFaces();
-    } else {
-      result.textContent = '\u2717 ' + data.error;
+  if (!name) { toast('请填写姓名', 'err'); return; }
+  if (!_faceFiles.length) { toast('请至少选择一张图片', 'err'); return; }
+
+  const total = _faceFiles.length;
+  const progressWrap = document.getElementById('face-progress');
+  const progressText = document.getElementById('face-progress-text');
+  const progressBar  = document.getElementById('face-progress-bar');
+  progressWrap.style.display = '';
+  result.textContent = '';
+
+  let succeeded = 0;
+  for (let i = 0; i < total; i++) {
+    progressText.textContent = `${i} / ${total}`;
+    progressBar.style.width = `${Math.round(i / total * 100)}%`;
+    const fd = new FormData();
+    fd.append('file', _faceFiles[i]);
+    fd.append('name', name);
+    try {
+      const r = await fetch(API + '/face/register', { method: 'POST', body: fd });
+      const d = await r.json();
+      if (d.status === 'ok') succeeded++;
+      else { result.textContent = `✕ 第 ${i+1} 张失败: ${d.error || JSON.stringify(d)}`; result.style.color = 'var(--red)'; }
+    } catch (e) {
+      result.textContent = `✕ 第 ${i+1} 张请求失败: ${e.message}`;
       result.style.color = 'var(--red)';
     }
-  } catch(e) {
-    result.textContent = '\u2717 ' + e.message;
-    result.style.color = 'var(--red)';
   }
+
+  progressText.textContent = `${total} / ${total}`;
+  progressBar.style.width = '100%';
+
+  if (succeeded === total) {
+    result.textContent = `✓ ${name} 注册完成，共 ${total} 张样本`;
+    result.style.color = 'var(--green)';
+    toast(`✓ ${name} 注册完成 (${total} 张)`, 'ok');
+    clearFaceFiles();
+    document.getElementById('face-name').value = '';
+    setTimeout(() => { progressWrap.style.display = 'none'; }, 1500);
+  } else {
+    result.textContent = `⚠ ${succeeded}/${total} 张成功`;
+    result.style.color = 'var(--amber)';
+    toast(`注册部分失败 (${succeeded}/${total})`, 'err');
+  }
+  loadFaces();
+}
+
+async function deleteFace(name) {
+  if (!confirm(`确认删除人脸「${name}」？该人脸的所有样本将被清除，无法恢复。`)) return;
+  try {
+    const r = await fetch(`${API}/faces/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    if (r.ok) {
+      toast(`已删除「${name}」`, 'ok');
+      loadFaces();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      toast(d.detail || '删除失败', 'err');
+    }
+  } catch { toast('删除失败', 'err'); }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1674,7 +1758,6 @@ function setupDropZone(zoneId, fileInputId, previewId) {
 }
 
 setupDropZone('item-drop-zone', 'item-file', 'item-preview');
-setupDropZone('face-drop-zone', 'face-file', 'face-preview');
 
 // ── 同步 System 页的 API 地址输入框 ─────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
