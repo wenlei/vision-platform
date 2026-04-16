@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vision Platform</title>
-<link rel="stylesheet" href="/ui/style.css?v=20260415c">
+<link rel="stylesheet" href="/ui/style.css?v=20260416b">
 </head>
 <body>
 
@@ -335,12 +335,14 @@
           <div class="card-title">已注册设备 <span id="devices-count" style="color:var(--text3)"></span></div>
           <table class="list-table" id="devices-table">
             <thead><tr>
-              <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>标签</th>
+              <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>标签</th><th>OTA</th>
             </tr></thead>
             <tbody id="devices-tbody">
-              <tr><td colspan="5" style="color:var(--text3)">加载中...</td></tr>
+              <tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>
             </tbody>
           </table>
+          <!-- hidden file input for OTA, reused for all devices -->
+          <input type="file" id="ota-file-input" accept=".bin" style="display:none" onchange="handleOtaFile(event)">
         </div>
 
       </div>
@@ -486,6 +488,6 @@
 
 <div id="toast"></div>
 
-<script src="/ui/app.js?v=20260415c"></script>
+<script src="/ui/app.js?v=20260416b"></script>
 </body>
 </html>

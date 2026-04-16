@@ -24,6 +24,7 @@ from api.stream_proxy import router as stream_router
 from api.devices import router as devices_router
 from api.groups import router as groups_router
 from api.bindings import router as bindings_router
+from api.ota import router as ota_router
 
 app.include_router(health_router)
 app.include_router(detection_router)
@@ -34,6 +35,7 @@ app.include_router(stream_router)
 app.include_router(devices_router)
 app.include_router(groups_router)
 app.include_router(bindings_router)
+app.include_router(ota_router)
 
 # ── 自动 migration：按需添加新列 ──────────────────────────────
 try:

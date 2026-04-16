@@ -108,6 +108,7 @@ let vflip   = 0;
 let streaming = false;
 let _currentCamIp  = 'unknown';
 let _currentCamMac = '';
+let _devices = [];  // cache for scope highlighting
 
 function initStream() {
   const img = document.getElementById('stream-img');
@@ -169,6 +170,7 @@ async function loadCamBar() {
       bar.innerHTML = '<span style="color:var(--text3);font-size:11px">无注册设备 — 前往 Devices 页注册摄像头</span>';
       return;
     }
+    _devices = devices;
     bar.innerHTML = '';
     devices.forEach(d => {
       const key = (d.mac || d.ip || '').replace(/[^a-z0-9]/gi, '');
@@ -177,6 +179,8 @@ async function loadCamBar() {
       const card = document.createElement('div');
       card.className = 'cam-card' + (isActive ? ' active' : '');
       card.dataset.url = d.stream_url || '';
+      card.dataset.mac = d.mac || '';
+      card.dataset.tag = d.tag || '';
       card.innerHTML =
         `<span class="status-dot checking" id="${dotId}" title="检测中..."></span>` +
         `<div><div class="cam-card-name">${esc(d.name)}${d.is_default ? ' <span style="color:var(--amber);font-size:10px">★</span>' : ''}</div>` +
@@ -294,6 +298,23 @@ function toggleVFlip()  { sendOrientConfig({ vflip: vflip ? 0 : 1 }); }
 function setScopeBtn(btn) {
   document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+
+  const scope = btn.dataset.scope || 'current';
+  const cards = document.querySelectorAll('#cam-bar .cam-card');
+  cards.forEach(card => {
+    if (scope === 'current' || scope === 'all') {
+      card.classList.remove('scope-dim');
+    } else {
+      // scope === 'group:tagname'
+      const tag = scope.replace(/^group:/, '');
+      const cardTags = (card.dataset.tag || '').split(/[,;]/).map(t => t.trim());
+      if (cardTags.includes(tag)) {
+        card.classList.remove('scope-dim');
+      } else {
+        card.classList.add('scope-dim');
+      }
+    }
+  });
 }
 
 let _scopePopulating = false;
@@ -948,14 +969,14 @@ function fillDiscovered(val) {
 
 async function loadDeviceList() {
   const tbody = document.getElementById('devices-tbody');
-  tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text3)">加载中...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>';
   try {
     const r = await fetch(API + '/devices');
     const data = await r.json();
     const devices = data.devices || [];
     document.getElementById('devices-count').textContent = `(${devices.length})`;
     if (!devices.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text3)">暂无注册设备</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text3)">暂无注册设备</td></tr>';
       return;
     }
     tbody.innerHTML = '';
@@ -984,11 +1005,55 @@ async function loadDeviceList() {
         tdTag.style.color = 'var(--text3)';
         tdTag.textContent = '-';
       }
-      tr.append(tdName, tdMac, tdIp, tdLoc, tdTag);
+      // OTA button
+      const tdOta = document.createElement('td');
+      tdOta.onclick = e => e.stopPropagation();  // don't trigger row edit
+      const otaBtn = document.createElement('button');
+      otaBtn.className = 'btn';
+      otaBtn.style.cssText = 'padding:2px 8px;font-size:10px';
+      otaBtn.textContent = '⬆ OTA';
+      otaBtn.title = '选择 .bin 固件文件推送到设备';
+      otaBtn.onclick = () => {
+        const inp = document.getElementById('ota-file-input');
+        inp.dataset.mac = d.mac;
+        inp.dataset.name = d.name;
+        inp.value = '';
+        inp.click();
+      };
+      tdOta.appendChild(otaBtn);
+      tr.append(tdName, tdMac, tdIp, tdLoc, tdTag, tdOta);
       tbody.appendChild(tr);
     });
   } catch {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--red)">加载失败</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--red)">加载失败</td></tr>';
+  }
+}
+
+let _otaMac = '';
+async function handleOtaFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const inp = event.target;
+  const mac = inp.dataset.mac;
+  const name = inp.dataset.name || mac;
+  if (!confirm(`推送固件 "${file.name}" (${(file.size/1024).toFixed(1)} KB) 到 ${name}？\n设备升级期间会短暂重启。`)) return;
+
+  toast(`⬆ 正在推送固件到 ${name}...`, 'ok', 30000);
+  const form = new FormData();
+  form.append('firmware', file, file.name);
+  try {
+    const r = await fetch(`${API}/devices/${encodeURIComponent(mac)}/ota`, {
+      method: 'POST',
+      body: form,
+    });
+    const d = await r.json();
+    if (r.ok && d.ok) {
+      toast(`✓ ${name} OTA 成功 (${(d.bytes/1024).toFixed(1)} KB)，正在重启...`, 'ok', 5000);
+    } else {
+      toast(`✗ OTA 失败: ${d.detail || d.msg || '未知错误'}`, 'err', 6000);
+    }
+  } catch (e) {
+    toast(`✗ OTA 请求失败: ${e.message}`, 'err', 5000);
   }
 }
 
