@@ -48,22 +48,29 @@ main.py
 ### Detection
 
 ```
-POST /detect                  Upload image → YOLO + CLIP, returns detections + annotated path
-POST /describe                Upload image → text description only (no annotated image)
-POST /detect/all              All registered devices: parallel capture → sequential inference
-POST /detect/group/{tag}      Devices matching tag: parallel capture → sequential inference
-POST /detect/{name-or-mac}    Single device by name (preferred) or MAC — no upload needed
+POST /detect                   Upload image → YOLO + CLIP, returns detections + annotated path
+POST /describe                 Upload image → text description only (no annotated image)
+POST /detect/all               All registered devices: parallel capture → sequential inference
+POST /detect/group/{tag}       Devices matching tag: parallel capture → sequential inference
+POST /detect/{name-or-mac}     Single device by name (preferred) or MAC — no upload needed
 ```
 
 `/detect/group/{tag}` matches devices whose `tag` field (comma/semicolon separated) contains the given tag exactly.  
 `/detect/{name-or-mac}` tries MAC match first (uppercase), then case-insensitive name match.
 
+### History
+
+```
+GET  /search                   Detection history. Params: ?label= ?device_mac= ?limit=50
+GET  /images/{filename}        Serve captured image (StaticFiles, /app/images/)
+```
+
 ### Bindings
 
 ```
-GET  /bindings           All tag bindings + endpoint definitions
-PUT  /bindings/{tag}     Replace enabled endpoint list for tag
-                         Body: { "enabled": ["detect", "describe", "capture_snapshot"] }
+GET  /bindings                 All tag bindings + endpoint definitions
+PUT  /bindings/{tag}           Replace enabled endpoint list for tag
+                               Body: { "enabled": ["detect", "describe", "capture_snapshot"] }
 ```
 
 Endpoint keys: `detect`, `describe`, `capture_snapshot`
@@ -71,19 +78,63 @@ Endpoint keys: `detect`, `describe`, `capture_snapshot`
 ### Devices
 
 ```
-GET    /devices                   List all devices
-POST   /devices                   Register { mac, name, ip, stream_url, tag, ... }
-PUT    /devices/{mac}             Update fields
-DELETE /devices/{mac}             Remove
-PUT    /devices/{mac}/set-default Set as default
-GET    /devices/scan?ip=…         Probe ESP32 at IP
-GET    /devices/ping?ip=…         Online status check
-GET    /devices/camstatus/{mac}   Camera resolution / RSSI / uptime
-POST   /devices/camconfig/{mac}   Set camera framesize
+GET    /devices                    List all devices
+POST   /devices                    Register { mac, name, ip, stream_url, tag, ... }
+PUT    /devices/{mac}              Update fields
+DELETE /devices/{mac}              Remove
+PUT    /devices/{mac}/set-default  Set as default
+GET    /devices/scan               Scan LAN for ESP32 devices
+GET    /devices/discovered         Discovered but unregistered devices
+GET    /devices/ping               Ping all registered devices
+GET    /devices/camstatus/{mac}    Camera resolution / RSSI / uptime
+POST   /devices/camconfig/{mac}    Set camera framesize
 ```
 
-`devices.tag` is a VARCHAR(64) storing comma or semicolon separated tags, e.g. `desk,front`.  
-The API page groups devices by tag for batch endpoint binding.
+`devices.tag` is a VARCHAR(64) storing comma or semicolon separated tags, e.g. `desk,front`.
+
+### Stream
+
+```
+GET    /stream                  MJPEG stream (default device)
+GET    /stream/{mac}            MJPEG stream for specific device
+GET    /stream/capture          Single frame JPEG (default device)
+GET    /stream/snapshot         Timestamped snapshot saved to disk
+GET    /stream/status           Broadcaster status
+GET    /stream/health           Stream online check
+GET    /stream/config           Current stream source + orientation
+POST   /stream/config           Update source + orientation (rotate/hmirror/vflip)
+```
+
+### Face Recognition
+
+```
+POST   /face/register           Register face embedding (form-data: file, name)
+POST   /face/identify           Identify face in uploaded image
+GET    /faces                   List registered faces
+```
+
+### Custom Items
+
+```
+POST   /register                Register item via CLIP (form-data: file, label)
+GET    /items                   List registered items
+```
+
+### Groups (legacy)
+
+```
+GET    /groups                  List detection groups
+POST   /groups                  Create group { name, description, macs: [...] }
+PUT    /groups/{name}           Update group
+DELETE /groups/{name}           Delete group
+```
+
+### Health & UI
+
+```
+GET    /health                  Service status, CUDA device, DB connection
+GET    /                        Web UI (index.html, no-cache)
+```
 
 ## Startup
 

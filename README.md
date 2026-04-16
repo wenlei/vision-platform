@@ -38,28 +38,22 @@ vision-platform/
 
 Base URL: `http://192.168.50.71:8000`
 
-### Detection — by Tag group
+### Detection
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/detect/group/{tag}` | YOLO + CLIP on all devices with this tag (parallel capture, annotated results) |
-| `POST` | `/describe/group/{tag}` | Lightweight — text description only, no annotated image |
-| `POST` | `/capture/group/{tag}` | Snapshot only, no inference |
-
-### Detection — by Device
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/detect/{name-or-mac}` | Single device by name (e.g. `desk-cam-01`) or MAC address |
-| `POST` | `/detect/all` | All registered devices simultaneously |
-| `POST` | `/detect` | Upload image file (form-data: `file`, optional `camera_ip`/`device_mac`) |
-| `POST` | `/describe` | Upload image — lightweight description, no annotated image |
+| `POST` | `/detect` | Upload image (form-data: `file`) → YOLO + CLIP, returns labels + annotated image |
+| `POST` | `/describe` | Upload image → text description only, no annotated image |
+| `POST` | `/detect/all` | All registered devices: parallel capture → sequential inference |
+| `POST` | `/detect/group/{tag}` | Devices with matching tag: parallel capture → sequential inference |
+| `POST` | `/detect/{name-or-mac}` | Single device by name (e.g. `desk-cam-01`) or MAC — no upload needed |
 
 ### History & Search
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/search` | Detection history. Params: `?label=person`, `?limit=50`, `?device_mac=…` |
+| `GET` | `/images/{filename}` | Serve captured image by filename |
 
 ### Devices
 
@@ -67,48 +61,65 @@ Base URL: `http://192.168.50.71:8000`
 |--------|------|-------------|
 | `GET` | `/devices` | List all registered devices |
 | `POST` | `/devices` | Register device `{mac, name, ip, stream_url, tag, …}` |
-| `PUT` | `/devices/{mac}` | Update device |
+| `PUT` | `/devices/{mac}` | Update device fields |
 | `DELETE` | `/devices/{mac}` | Remove device |
 | `PUT` | `/devices/{mac}/set-default` | Set as default device |
-| `GET` | `/devices/scan?ip=…` | Probe ESP32 at IP, return MAC + info |
-| `GET` | `/devices/ping?ip=…` | Online check (RSSI, uptime) |
+| `GET` | `/devices/scan` | Scan LAN for ESP32 devices |
+| `GET` | `/devices/discovered` | List discovered but unregistered devices |
+| `GET` | `/devices/ping` | Ping all registered devices |
+| `GET` | `/devices/camstatus/{mac}` | Camera resolution, RSSI, uptime |
+| `POST` | `/devices/camconfig/{mac}` | Set camera framesize |
 
 ### Tag ↔ Endpoint Bindings
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/bindings` | All tag bindings + endpoint definitions |
-| `PUT` | `/bindings/{tag}` | Set enabled endpoint keys for a tag `{enabled: ["detect", "describe"]}` |
+| `GET` | `/bindings` | All tag bindings + available endpoint definitions |
+| `PUT` | `/bindings/{tag}` | Set enabled endpoints for tag `{enabled: ["detect", "describe", "capture_snapshot"]}` |
 
 ### Face Recognition
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/face/register` | Register face (form-data: `file`, `name`) |
+| `POST` | `/face/register` | Register face embedding (form-data: `file`, `name`) |
 | `POST` | `/face/identify` | Identify face in uploaded image |
-| `GET` | `/faces` | List registered faces |
+| `GET` | `/faces` | List all registered faces |
 
 ### Custom Items
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/register` | Register custom item (form-data: `file`, `label`) |
+| `POST` | `/register` | Register custom item via CLIP (form-data: `file`, `label`) |
 | `GET` | `/items` | List registered items |
 
 ### Stream
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/stream` | MJPEG stream (proxy from ESP32, orientation applied) |
-| `GET` | `/stream/capture` | Single frame JPEG |
-| `GET` | `/stream/snapshot` | Orientation-corrected JPEG save |
-| `GET/POST` | `/stream/config` | Get / set stream source + orientation (rotate/hmirror/vflip) |
+| `GET` | `/stream` | MJPEG stream (default device, orientation-corrected) |
+| `GET` | `/stream/{mac}` | MJPEG stream for specific device |
+| `GET` | `/stream/capture` | Single frame JPEG (default device) |
+| `GET` | `/stream/snapshot` | Timestamped snapshot saved to disk |
+| `GET` | `/stream/status` | Broadcaster status |
+| `GET` | `/stream/health` | Stream online check |
+| `GET` | `/stream/config` | Current stream source + orientation config |
+| `POST` | `/stream/config` | Update stream source + orientation (rotate/hmirror/vflip) |
 
-### Health
+### Detection Groups (legacy)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | Service status, CUDA, DB connection |
+| `GET` | `/groups` | List all detection groups |
+| `POST` | `/groups` | Create group `{name, description, macs: […]}` |
+| `PUT` | `/groups/{name}` | Update group |
+| `DELETE` | `/groups/{name}` | Delete group |
+
+### Health & UI
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Service status, CUDA device, DB connection |
+| `GET` | `/` | Web UI (index.html, no-cache) |
 
 ## Device Tags
 
