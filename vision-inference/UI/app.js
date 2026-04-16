@@ -671,7 +671,11 @@ async function registerItem() {
       const r = await fetch(API + '/register', { method: 'POST', body: fd });
       const d = await r.json();
       if (d.status === 'ok') succeeded++;
-    } catch {}
+      else { result.textContent = `✕ 第 ${i+1} 张失败: ${d.error || JSON.stringify(d)}`; result.style.color = 'var(--red)'; }
+    } catch (e) {
+      result.textContent = `✕ 第 ${i+1} 张请求失败: ${e.message}`;
+      result.style.color = 'var(--red)';
+    }
   }
 
   progressText.textContent = `${total} / ${total}`;

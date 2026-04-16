@@ -56,7 +56,7 @@ def _resolve_device_mac(ip: str):
         return None
 
 
-def _search_custom_items(cur, embedding, threshold=0.75):
+def _search_custom_items(cur, embedding, threshold=0.60):
     """在 custom_items 表中搜索与 CLIP embedding 相似的自定义物品。"""
     cur.execute(
         "SELECT label, 1-(embedding<=>%s::vector) AS sim FROM custom_items "
