@@ -8,6 +8,19 @@ function esc(str) {
   return el.innerHTML;
 }
 
+// ── 侧边栏折叠 ───────────────────────────────────────────────
+(function() {
+  if (localStorage.getItem('sidebar_collapsed') === '1') {
+    document.getElementById('sidebar').classList.add('collapsed');
+  }
+})();
+
+function toggleSidebar() {
+  const nav = document.getElementById('sidebar');
+  const collapsed = nav.classList.toggle('collapsed');
+  localStorage.setItem('sidebar_collapsed', collapsed ? '1' : '0');
+}
+
 // ── 导航 ─────────────────────────────────────────────────────
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
@@ -277,46 +290,50 @@ function toggleMirror() { sendOrientConfig({ hmirror: hmirror ? 0 : 1 }); }
 function toggleVFlip()  { sendOrientConfig({ vflip: vflip ? 0 : 1 }); }
 
 // 检测范围选择器
+// ── 检测范围选择器 ────────────────────────────────────────────
+function setScopeBtn(btn) {
+  document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+let _scopePopulating = false;
 async function populateDetectScope() {
-  const sel = document.getElementById('detect-scope');
-  if (!sel) return;
-  while (sel.options.length > 2) sel.remove(2);
+  if (_scopePopulating) return;
+  _scopePopulating = true;
+  const bar = document.getElementById('scope-bar');
+  if (!bar) { _scopePopulating = false; return; }
+  // Remove previously injected tag buttons
+  [...bar.querySelectorAll('[data-scope^="group:"]')].forEach(b => b.remove());
   try {
     const r = await fetch(API + '/devices');
     const { devices = [] } = await r.json();
-    const tagMap = {};
+    const tagSet = new Set();
     devices.forEach(d => {
       if (!d.tag) return;
-      const tags = d.tag.split(',').map(t => t.trim()).filter(t => t);
-      tags.forEach(tag => {
-        if (!tagMap[tag]) tagMap[tag] = 0;
-        tagMap[tag]++;
-      });
+      d.tag.split(/[,;]/).map(t => t.trim()).filter(t => t).forEach(t => tagSet.add(t));
     });
-    const tags = Object.keys(tagMap).sort();
-    if (tags.length) {
-      const og = document.createElement('optgroup');
-      og.label = 'Tag 分组';
-      tags.forEach(tag => {
-        const opt = document.createElement('option');
-        opt.value = 'group:' + tag;
-        opt.textContent = '🏷 ' + tag + ` (${tagMap[tag]})`;
-        og.appendChild(opt);
-      });
-      sel.appendChild(og);
-    }
+    [...tagSet].sort().forEach(tag => {
+      const btn = document.createElement('button');
+      btn.className = 'scope-btn';
+      btn.dataset.scope = 'group:' + tag;
+      btn.textContent = '🏷 ' + tag;
+      btn.onclick = () => setScopeBtn(btn);
+      bar.appendChild(btn);
+    });
   } catch {}
+  _scopePopulating = false;
 }
 
 async function triggerScopedDetect() {
-  const scope = document.getElementById('detect-scope')?.value || 'current';
+  const active = document.querySelector('.scope-btn.active');
+  const scope = active?.dataset.scope || 'current';
   if (scope === 'current') {
     triggerDetect();
   } else if (scope === 'all') {
     triggerDetectAll();
   } else if (scope.startsWith('group:')) {
-    const groupName = scope.slice(6);
-    await _triggerMultiDetect('/detect/group/' + encodeURIComponent(groupName), `分组 "${groupName}"`);
+    const tag = scope.slice(6);
+    await _triggerMultiDetect('/detect/group/' + encodeURIComponent(tag), `🏷 ${tag}`);
   }
 }
 
@@ -446,73 +463,82 @@ initStream();
 // HISTORY 页
 // ══════════════════════════════════════════════════════════════
 async function loadHistory() {
-  const grid = document.getElementById('history-grid');
-  grid.innerHTML = '<span style="color:var(--text3)">加载中...</span>';
+  const c = document.getElementById('history-container');
+  c.innerHTML = '<span style="color:var(--text3)">加载中...</span>';
   try {
     const r = await fetch(API + '/search?limit=50');
     const data = await r.json();
-    renderHistoryGrid(data.results || []);
-  } catch { grid.innerHTML = '<span style="color:var(--red)">加载失败</span>'; }
+    renderHistoryTable(data.results || []);
+  } catch { c.innerHTML = '<span style="color:var(--red)">加载失败</span>'; }
 }
 
 async function searchHistory() {
   const label = document.getElementById('search-label').value.trim();
   if (!label) return loadHistory();
-  const grid = document.getElementById('history-grid');
-  grid.innerHTML = '<span style="color:var(--text3)">搜索中...</span>';
+  const c = document.getElementById('history-container');
+  c.innerHTML = '<span style="color:var(--text3)">搜索中...</span>';
   try {
     const r = await fetch(`${API}/search?label=${encodeURIComponent(label)}&limit=50`);
     const data = await r.json();
-    renderHistoryGrid(data.results || []);
-  } catch { grid.innerHTML = '<span style="color:var(--red)">搜索失败</span>'; }
+    renderHistoryTable(data.results || []);
+  } catch { c.innerHTML = '<span style="color:var(--red)">搜索失败</span>'; }
 }
 
-function renderHistoryGrid(results) {
-  const grid = document.getElementById('history-grid');
+function clearSearch() {
+  document.getElementById('search-label').value = '';
+  loadHistory();
+}
+
+function renderHistoryTable(results) {
+  const c = document.getElementById('history-container');
   if (!results.length) {
-    grid.innerHTML = '<span style="color:var(--text3)">暂无记录</span>';
+    c.innerHTML = '<span style="color:var(--text3)">暂无记录</span>';
     return;
   }
-  grid.innerHTML = '';
+
+  const table = document.createElement('table');
+  table.className = 'list-table';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th style="width:72px">缩略图</th>
+        <th style="width:140px">时间</th>
+        <th style="width:120px">设备</th>
+        <th>标签</th>
+        <th>描述</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  const tbody = table.querySelector('tbody');
+
   results.forEach(r => {
-    const card = document.createElement('div');
-    card.className = 'history-card';
-    const time = new Date(r.captured_at).toLocaleString('zh-CN', { hour12: false });
-    const tags = (r.labels || []).slice(0, 4);
+    const tr = document.createElement('tr');
+    const time = r.captured_at
+      ? new Date(r.captured_at).toLocaleString('zh-CN', { hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      : '—';
+    const device = esc(r.device_name || r.camera_ip || r.device_mac || '—');
+    const labels = (r.labels || []);
+    const tagHtml = labels.length
+      ? labels.map(t => `<span class="detect-tag">${esc(t)}</span>`).join('')
+      : '<span style="color:var(--text3)">—</span>';
+    const desc = r.description ? esc(r.description) : '<span style="color:var(--text3)">—</span>';
+    const thumb = r.image_url
+      ? `<img src="${esc(r.image_url)}" style="width:64px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);display:block" loading="lazy" onclick="window.open('${esc(r.image_url)}','_blank')" title="点击查看原图" class="history-thumb-sm">`
+      : `<div style="width:64px;height:48px;background:var(--bg3);border-radius:4px;border:1px solid var(--border)"></div>`;
 
-    const infoDiv = document.createElement('div');
-    infoDiv.className = 'history-info';
-
-    const timeDiv = document.createElement('div');
-    timeDiv.className = 'history-time';
-    timeDiv.textContent = time;
-    infoDiv.appendChild(timeDiv);
-
-    const deviceDiv = document.createElement('div');
-    deviceDiv.style.cssText = 'font-size:11px;color:var(--text2);margin-bottom:4px';
-    deviceDiv.textContent = r.device_name || r.camera_ip || '未知设备';
-    infoDiv.appendChild(deviceDiv);
-
-    const tagsDiv = document.createElement('div');
-    tagsDiv.className = 'history-tags';
-    tags.forEach(t => {
-      const span = document.createElement('span');
-      span.className = 'history-tag';
-      span.textContent = t;
-      tagsDiv.appendChild(span);
-    });
-    infoDiv.appendChild(tagsDiv);
-
-    if (r.description) {
-      const descDiv = document.createElement('div');
-      descDiv.style.cssText = 'font-size:10px;color:var(--text3);margin-top:4px';
-      descDiv.textContent = r.description;
-      infoDiv.appendChild(descDiv);
-    }
-
-    card.appendChild(infoDiv);
-    grid.appendChild(card);
+    tr.innerHTML = `
+      <td style="padding:8px 10px">${thumb}</td>
+      <td style="white-space:nowrap;color:var(--text3);font-size:11px">${esc(time)}</td>
+      <td style="font-size:11px;font-weight:600">${device}</td>
+      <td style="line-height:2">${tagHtml}</td>
+      <td style="font-size:11px;color:var(--text2);max-width:340px;word-break:break-word">${desc}</td>
+    `;
+    tbody.appendChild(tr);
   });
+
+  c.innerHTML = '';
+  c.appendChild(table);
 }
 
 // ══════════════════════════════════════════════════════════════

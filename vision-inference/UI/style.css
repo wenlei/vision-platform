@@ -51,18 +51,35 @@ nav {
   display: flex;
   flex-direction: column;
   box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+  transition: width 0.22s ease, min-width 0.22s ease;
+  overflow: hidden;
+}
+
+nav.collapsed {
+  width: 52px;
+  min-width: 52px;
 }
 
 .nav-header {
-  padding: 20px 18px 16px;
+  padding: 16px 12px 14px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 58px;
+  flex-shrink: 0;
 }
+
+.nav-brand { overflow: hidden; flex: 1; min-width: 0; transition: opacity 0.15s; }
+nav.collapsed .nav-brand { opacity: 0; pointer-events: none; }
 
 .nav-logo {
   font-size: 15px;
   font-weight: 700;
   color: var(--accent);
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .nav-sub {
@@ -70,15 +87,38 @@ nav {
   color: var(--text3);
   margin-top: 2px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
-.nav-items { flex: 1; padding: 10px 8px; }
+.nav-toggle {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+.nav-toggle:hover { background: var(--bg3); color: var(--accent); border-color: var(--accent); }
+
+.toggle-arrow {
+  transition: transform 0.22s ease;
+  transform-origin: center;
+}
+nav.collapsed .toggle-arrow { transform: rotate(180deg); }
+
+.nav-items { flex: 1; padding: 10px 6px; overflow: hidden; }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  padding: 9px 10px;
   cursor: pointer;
   color: var(--text2);
   border-radius: var(--radius-sm);
@@ -87,7 +127,9 @@ nav {
   font-weight: 500;
   user-select: none;
   margin-bottom: 2px;
+  white-space: nowrap;
 }
+nav.collapsed .nav-item { justify-content: center; padding: 9px 0; }
 
 .nav-item:hover { background: var(--bg3); color: var(--text); }
 
@@ -97,17 +139,24 @@ nav {
   font-weight: 600;
 }
 
-.nav-icon { font-size: 15px; width: 20px; text-align: center; }
+.nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+
+.nav-label { transition: opacity 0.15s; overflow: hidden; }
+nav.collapsed .nav-label { opacity: 0; width: 0; pointer-events: none; }
 
 .nav-footer {
-  padding: 12px 16px;
+  padding: 12px 14px;
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 44px;
+  flex-shrink: 0;
+  overflow: hidden;
 }
+nav.collapsed .nav-footer { justify-content: center; padding: 12px 0; }
 
-#health-label { color: var(--text3); font-size: 11px; font-weight: 500; }
+#health-label { color: var(--text3); font-size: 11px; font-weight: 500; white-space: nowrap; }
 
 /* ── Status Dots ─────────────────────────────────────────── */
 .status-dot {
@@ -470,6 +519,9 @@ input::placeholder { color: var(--text3); }
   font-weight: 500;
 }
 
+.history-thumb-sm { cursor: zoom-in; transition: opacity 0.12s; }
+.history-thumb-sm:hover { opacity: 0.82; }
+
 /* ══════════════════════════════════════════════════════════
    PAGE: ITEMS / FACES
 ══════════════════════════════════════════════════════════ */
@@ -604,6 +656,39 @@ input::placeholder { color: var(--text3); }
 .config-row:last-child { border-bottom: none; }
 .config-key { color: var(--accent); font-size: 11px; font-weight: 600; font-family: monospace; }
 .config-val input { width: 100%; background: var(--bg); }
+
+/* ── Scope bar (Live page) ───────────────────────────────── */
+.scope-bar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+}
+
+.scope-btn {
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text3);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+  user-select: none;
+}
+.scope-btn:hover { background: var(--bg2); color: var(--text2); }
+.scope-btn.active {
+  background: var(--bg2);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
 
 /* ── Scrollbar ───────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }

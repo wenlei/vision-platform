@@ -4,41 +4,48 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vision Platform</title>
-<link rel="stylesheet" href="/ui/style.css?v=20260414a">
+<link rel="stylesheet" href="/ui/style.css?v=20260415c">
 </head>
 <body>
 
 <!-- ── 侧边栏 ──────────────────────────────────────────────── -->
-<nav>
+<nav id="sidebar">
   <div class="nav-header">
-    <div class="nav-logo">Vision</div>
-    <div class="nav-sub">Platform v1.0</div>
+    <div class="nav-brand">
+      <div class="nav-logo">Vision</div>
+      <div class="nav-sub">Platform v1.0</div>
+    </div>
+    <button class="nav-toggle" id="nav-toggle" onclick="toggleSidebar()" title="收起侧边栏">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path class="toggle-arrow" d="M9 2L4 7L9 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
   </div>
 
   <div class="nav-items">
     <div class="nav-item active" data-page="live">
-      <span class="nav-icon">📷</span> Live
+      <span class="nav-icon">📷</span><span class="nav-label">Live</span>
     </div>
     <div class="nav-item" data-page="history">
-      <span class="nav-icon">📋</span> History
+      <span class="nav-icon">📋</span><span class="nav-label">History</span>
     </div>
     <div class="nav-item" data-page="items">
-      <span class="nav-icon">🏷️</span> Items
+      <span class="nav-icon">🏷️</span><span class="nav-label">Items</span>
     </div>
     <div class="nav-item" data-page="faces">
-      <span class="nav-icon">👤</span> Faces
+      <span class="nav-icon">👤</span><span class="nav-label">Faces</span>
     </div>
     <div class="nav-item" data-page="devices">
-      <span class="nav-icon">📡</span> Devices
+      <span class="nav-icon">📡</span><span class="nav-label">Devices</span>
     </div>
     <div class="nav-item" data-page="api">
-      <span class="nav-icon">🔗</span> API
+      <span class="nav-icon">🔗</span><span class="nav-label">API</span>
     </div>
   </div>
 
   <div class="nav-footer">
     <span class="status-dot" id="health-dot"></span>
-    <span id="health-label">连接中...</span>
+    <span class="nav-label" id="health-label">连接中...</span>
   </div>
 </nav>
 
@@ -51,11 +58,11 @@
       <span class="page-title">📷 Live Preview</span>
       <div class="row">
         <button class="btn" id="btn-stream" onclick="toggleStream()">⏹ 断开</button>
-        <select id="detect-scope" title="检测范围" style="height:32px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px">
-          <option value="current">📷 当前摄像头</option>
-          <option value="all">🌐 全部设备</option>
-        </select>
-        <button class="btn" onclick="triggerScopedDetect()">⚡ 检测</button>
+        <div class="scope-bar" id="scope-bar">
+          <button class="scope-btn active" data-scope="current" onclick="setScopeBtn(this)">📷 当前</button>
+          <button class="scope-btn" data-scope="all" onclick="setScopeBtn(this)">🌐 全部</button>
+        </div>
+        <button class="btn primary" onclick="triggerScopedDetect()">⚡ 检测</button>
         <button class="btn" onclick="screenshot()">💾 截屏</button>
       </div>
     </div>
@@ -113,12 +120,13 @@
     </div>
     <div class="page-body">
       <div class="history-toolbar">
-        <input type="text" id="search-label" placeholder="搜索标签，例如：person、cell phone、keys" style="flex:1">
+        <input type="text" id="search-label" placeholder="标签过滤，如 person、keys…" style="flex:1" onkeydown="if(event.key==='Enter')searchHistory()">
         <button class="btn primary" onclick="searchHistory()">🔍 搜索</button>
-        <button class="btn" onclick="loadHistory()">全部</button>
+        <button class="btn" onclick="clearSearch()">清空</button>
       </div>
-      <div class="history-grid" id="history-grid">
+      <div id="history-container">
         <span style="color:var(--text3)">加载中...</span>
+      </div>
       </div>
     </div>
   </div>
@@ -478,6 +486,6 @@
 
 <div id="toast"></div>
 
-<script src="/ui/app.js?v=20260414a"></script>
+<script src="/ui/app.js?v=20260415c"></script>
 </body>
 </html>

@@ -93,4 +93,9 @@ if UI_DIR.exists():
     app.mount("/ui", StaticFiles(directory=str(UI_DIR)), name="ui")
     log.info("UI mounted at /ui → %s", UI_DIR)
 
+_IMG_DIR = Path("/app/images")
+if _IMG_DIR.exists():
+    app.mount("/images", StaticFiles(directory=str(_IMG_DIR)), name="images")
+    log.info("Images mounted at /images → %s", _IMG_DIR)
+
 log.info("Vision Inference Service ready")
