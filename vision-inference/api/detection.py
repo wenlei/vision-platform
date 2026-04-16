@@ -70,6 +70,53 @@ def _search_custom_items(cur, embedding, threshold=0.60):
     ]
 
 
+def _match_bbox_custom_items(img: Image.Image, boxes, threshold=0.60):
+    """
+    对每个 YOLO bbox 裁切后做 CLIP，匹配自定义物品。
+    boxes: list of {"label", "confidence", "bbox": [x1,y1,x2,y2]}
+    返回: list of {"label", "confidence", "bbox", "custom_label", "custom_sim"}
+    同一 custom_label 只保留相似度最高的一条。
+    """
+    if not boxes:
+        return []
+    # 检查是否有注册物品
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute("SELECT COUNT(*) FROM custom_items")
+            if cur.fetchone()[0] == 0:
+                return []
+    except Exception:
+        return []
+
+    best: dict[str, dict] = {}  # custom_label → best match
+    w, h = img.size
+    for det in boxes:
+        if det["confidence"] < 0.5:
+            continue
+        x1, y1, x2, y2 = det["bbox"]
+        # clamp to image bounds
+        x1, y1 = max(0, int(x1)), max(0, int(y1))
+        x2, y2 = min(w, int(x2)), min(h, int(y2))
+        if x2 - x1 < 10 or y2 - y1 < 10:
+            continue
+        crop = img.crop((x1, y1, x2, y2))
+        emb = get_clip_embedding(crop)
+        try:
+            with get_conn() as (conn, cur):
+                matches = _search_custom_items(cur, emb, threshold)
+        except Exception:
+            continue
+        for clabel, csim in matches:
+            if clabel not in best or csim > best[clabel]["custom_sim"]:
+                best[clabel] = {
+                    "yolo_label": det["label"],
+                    "custom_label": clabel,
+                    "custom_sim": csim,
+                    "bbox": det["bbox"],
+                }
+    return list(best.values())
+
+
 @router.post("/detect")
 async def detect(request: Request,
                  file: UploadFile = File(...),
@@ -110,14 +157,9 @@ async def detect(request: Request,
                 labels.append(lbl)
                 conf_data[lbl] = conf
 
-    # CLIP 自定义物品匹配
-    embedding = get_clip_embedding(img)
-    custom_matches = []
-    try:
-        with get_conn() as (conn, cur):
-            custom_matches = _search_custom_items(cur, embedding)
-    except Exception as e:
-        log.warning("Custom item search failed: %s", e)
+    # CLIP 自定义物品匹配（per-bbox 裁切）
+    bbox_matches = _match_bbox_custom_items(img, detections)
+    custom_matches = [(m["custom_label"], m["custom_sim"]) for m in bbox_matches]
 
     # 保存图片
     annotated = results[0].plot()
@@ -182,18 +224,14 @@ async def describe(request: Request,
         for box in r.boxes:
             lbl = yolo.names[int(box.cls)]
             conf = round(float(box.conf), 2)
-            detections.append({"label": lbl, "confidence": conf})
+            detections.append({"label": lbl, "confidence": conf,
+                                "bbox": [round(x, 1) for x in box.xyxy[0].tolist()]})
             if conf > 0.5:
                 labels.append(lbl)
                 conf_data[lbl] = conf
 
-    embedding = get_clip_embedding(img)
-    custom_matches = []
-    try:
-        with get_conn() as (conn, cur):
-            custom_matches = _search_custom_items(cur, embedding)
-    except Exception as e:
-        log.warning("Custom item search failed: %s", e)
+    bbox_matches = _match_bbox_custom_items(img, detections)
+    custom_matches = [(m["custom_label"], m["custom_sim"]) for m in bbox_matches]
 
     image_path = save_image_file(img, tag)
 
@@ -261,13 +299,8 @@ def _run_detect_on_bytes(contents: bytes, mac: str, ip: str):
                 labels.append(lbl)
                 conf_data[lbl] = conf
 
-    embedding = get_clip_embedding(img)
-    custom_matches = []
-    try:
-        with get_conn() as (conn, cur):
-            custom_matches = _search_custom_items(cur, embedding)
-    except Exception as e:
-        log.warning("Custom item search failed: %s", e)
+    bbox_matches = _match_bbox_custom_items(img, detections)
+    custom_matches = [(m["custom_label"], m["custom_sim"]) for m in bbox_matches]
 
     annotated = results[0].plot()
     image_path = save_image_file(img, tag)
