@@ -565,6 +565,8 @@ function renderHistoryTable(results) {
 // ══════════════════════════════════════════════════════════════
 // ITEMS 页
 // ══════════════════════════════════════════════════════════════
+let _itemFiles = [];  // accumulated File objects for multi-angle registration
+
 async function loadItems() {
   try {
     const r = await fetch(API + '/items');
@@ -573,41 +575,136 @@ async function loadItems() {
     document.getElementById('items-count').textContent = `(${items.length})`;
     const tbody = document.getElementById('items-tbody');
     if (!items.length) {
-      tbody.innerHTML = '<tr><td colspan="3" style="color:var(--text3)">暂无注册物品</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text3)">暂无注册物品</td></tr>';
       return;
     }
     tbody.innerHTML = '';
     items.forEach(it => {
       const tr = document.createElement('tr');
       const tdLabel = document.createElement('td');
+      tdLabel.style.fontWeight = '700';
       tdLabel.textContent = it.label;
+      const tdDesc = document.createElement('td');
+      tdDesc.style.cssText = 'font-size:11px;color:var(--text3)';
+      tdDesc.textContent = it.description || '—';
       const tdCount = document.createElement('td');
-      tdCount.innerHTML = `<span class="badge blue">${esc(String(it.sample_count))}</span>`;
+      tdCount.innerHTML = `<span class="badge blue">${esc(String(it.sample_count))} 张</span>`;
       const tdTime = document.createElement('td');
+      tdTime.style.cssText = 'font-size:11px;color:var(--text3)';
       tdTime.textContent = new Date(it.registered_at).toLocaleDateString('zh-CN');
-      tr.append(tdLabel, tdCount, tdTime);
+      const tdAction = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn';
+      delBtn.style.cssText = 'padding:2px 8px;font-size:10px;color:var(--red);border-color:var(--red)';
+      delBtn.textContent = '删除';
+      delBtn.onclick = () => deleteItem(it.label);
+      tdAction.appendChild(delBtn);
+      tr.append(tdLabel, tdDesc, tdCount, tdTime, tdAction);
       tbody.appendChild(tr);
     });
   } catch {
-    document.getElementById('items-tbody').innerHTML = '<tr><td colspan="3" style="color:var(--red)">加载失败</td></tr>';
+    document.getElementById('items-tbody').innerHTML = '<tr><td colspan="5" style="color:var(--red)">加载失败</td></tr>';
   }
 }
 
+function addItemFiles(fileList) {
+  const newFiles = Array.from(fileList);
+  _itemFiles = _itemFiles.concat(newFiles);
+  renderItemThumbs();
+}
+
+function renderItemThumbs() {
+  const grid = document.getElementById('item-preview-grid');
+  const thumbs = document.getElementById('item-thumbs');
+  const count = document.getElementById('item-file-count');
+  if (!_itemFiles.length) { grid.style.display = 'none'; return; }
+  grid.style.display = '';
+  count.textContent = _itemFiles.length;
+  thumbs.innerHTML = '';
+  _itemFiles.forEach((f, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;width:72px;height:72px;flex-shrink:0';
+    const img = document.createElement('img');
+    if (img._objUrl) URL.revokeObjectURL(img._objUrl);
+    img._objUrl = URL.createObjectURL(f);
+    img.src = img._objUrl;
+    img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--border)';
+    const del = document.createElement('span');
+    del.textContent = '✕';
+    del.style.cssText = 'position:absolute;top:2px;right:4px;font-size:11px;color:#fff;cursor:pointer;text-shadow:0 0 3px rgba(0,0,0,0.8);line-height:1';
+    del.onclick = () => { _itemFiles.splice(i, 1); renderItemThumbs(); };
+    wrap.appendChild(img);
+    wrap.appendChild(del);
+    thumbs.appendChild(wrap);
+  });
+}
+
+function clearItemFiles() {
+  _itemFiles = [];
+  document.getElementById('item-file').value = '';
+  renderItemThumbs();
+}
+
 async function registerItem() {
-  const file  = document.getElementById('item-file').files[0];
   const label = document.getElementById('item-label').value.trim();
   const desc  = document.getElementById('item-desc').value.trim();
-  if (!file || !label) { toast('请选择图片并填写物品名称', 'err'); return; }
-  const fd = new FormData();
-  fd.append('file', file);
-  fd.append('label', label);
-  if (desc) fd.append('description', desc);
+  const result = document.getElementById('item-result');
+  if (!label) { toast('请填写物品名称', 'err'); return; }
+  if (!_itemFiles.length) { toast('请至少选择一张图片', 'err'); return; }
+
+  const total = _itemFiles.length;
+  const progressWrap = document.getElementById('item-progress');
+  const progressText = document.getElementById('item-progress-text');
+  const progressBar  = document.getElementById('item-progress-bar');
+  progressWrap.style.display = '';
+  result.textContent = '';
+
+  let succeeded = 0;
+  for (let i = 0; i < total; i++) {
+    progressText.textContent = `${i} / ${total}`;
+    progressBar.style.width = `${Math.round(i / total * 100)}%`;
+    const fd = new FormData();
+    fd.append('file', _itemFiles[i]);
+    fd.append('label', label);
+    if (desc && i === 0) fd.append('description', desc);
+    try {
+      const r = await fetch(API + '/register', { method: 'POST', body: fd });
+      const d = await r.json();
+      if (d.status === 'ok') succeeded++;
+    } catch {}
+  }
+
+  progressText.textContent = `${total} / ${total}`;
+  progressBar.style.width = '100%';
+
+  if (succeeded === total) {
+    result.textContent = `✓ ${label} 注册完成，共 ${total} 张样本`;
+    result.style.color = 'var(--green)';
+    toast(`✓ ${label} 注册完成 (${total} 张)`, 'ok');
+    clearItemFiles();
+    document.getElementById('item-label').value = '';
+    document.getElementById('item-desc').value = '';
+    setTimeout(() => { progressWrap.style.display = 'none'; }, 1500);
+  } else {
+    result.textContent = `⚠ ${succeeded}/${total} 张成功`;
+    result.style.color = 'var(--amber)';
+    toast(`注册部分失败 (${succeeded}/${total})`, 'err');
+  }
+  loadItems();
+}
+
+async function deleteItem(label) {
+  if (!confirm(`确认删除物品「${label}」？该物品的所有样本将被清除，无法恢复。`)) return;
   try {
-    const r = await fetch(API + '/register', { method: 'POST', body: fd });
-    const data = await r.json();
-    toast(data.message || '注册成功', 'ok');
-    loadItems();
-  } catch { toast('注册失败', 'err'); }
+    const r = await fetch(`${API}/items/${encodeURIComponent(label)}`, { method: 'DELETE' });
+    if (r.ok) {
+      toast(`已删除「${label}」`, 'ok');
+      loadItems();
+    } else {
+      const d = await r.json();
+      toast(`删除失败: ${d.detail || '未知错误'}`, 'err');
+    }
+  } catch { toast('删除失败', 'err'); }
 }
 
 function previewFile(input, previewId) {

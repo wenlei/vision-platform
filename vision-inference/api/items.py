@@ -2,14 +2,15 @@
 items.py -- 自定义物品注册与列表路由
 
 路由：
-  POST /register — 注册自定义物品（CLIP embedding，滚动平均）
-  GET  /items    — 已注册物品列表
+  POST   /register        — 注册自定义物品（CLIP embedding，滚动平均）
+  GET    /items           — 已注册物品列表
+  DELETE /items/{label}   — 删除物品
 """
 
 import io
 import logging
 
-from fastapi import APIRouter, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from PIL import Image
 
 from api.models import get_clip_embedding
@@ -94,3 +95,20 @@ async def list_items():
             }
     except Exception as e:
         return {"error": str(e)}
+
+
+@router.delete("/items/{label}")
+async def delete_item(label: str):
+    """删除已注册物品（按 label 完全匹配）。"""
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute("DELETE FROM custom_items WHERE label = %s RETURNING label", (label,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail=f"Item '{label}' not found")
+        return {"status": "ok", "deleted": label}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception("delete item error")
+        raise HTTPException(status_code=500, detail=str(e))
