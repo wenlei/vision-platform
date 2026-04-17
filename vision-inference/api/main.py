@@ -75,6 +75,7 @@ try:
             device_mac VARCHAR(17) NOT NULL REFERENCES devices(mac)         ON DELETE CASCADE,
             PRIMARY KEY (group_id, device_mac)
         )""")
+        cur.execute("ALTER TABLE faces ADD COLUMN IF NOT EXISTS sample_count INTEGER NOT NULL DEFAULT 1")
     log.info("DB migration: devices columns + detection_groups tables OK")
 except Exception as e:
     log.warning("DB migration failed: %s", e)
