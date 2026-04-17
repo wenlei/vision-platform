@@ -431,35 +431,48 @@ async function triggerDetect() {
     result.innerHTML = '';
     let hasContent = false;
 
-    // YOLO 标签
+    // 人脸识别结果（用于替换 person 标签）
+    const matched = (faceData.results || []).filter(f => f.matched);
+    const faceQueue = [...matched]; // 依次消费，支持多人
+
+    // YOLO 标签（person → 替换为识别到的人名）
     if (data.description && data.description !== 'No objects detected') {
       const tags = (data.description.replace('Detected: ', '')).split(', ');
       tags.forEach(t => {
+        const tag = t.trim();
         const span = document.createElement('span');
         span.className = 'detect-tag';
-        span.textContent = t.trim();
+        // 遇到 person/Nx person，尝试用人脸结果替换
+        const isPerson = /^(\d+x)?person$/i.test(tag);
+        if (isPerson && faceQueue.length) {
+          const f = faceQueue.shift();
+          const prefix = tag.match(/^(\d+x)/)?.[1] || '';
+          span.textContent = `${prefix}${f.name}`;
+          span.style.borderColor = f.confidence === 'high' ? 'var(--green)' : 'var(--amber)';
+          span.style.color      = f.confidence === 'high' ? 'var(--green)' : 'var(--amber)';
+          span.title = `person · ${(f.similarity*100).toFixed(0)}% ${f.confidence}`;
+        } else {
+          span.textContent = tag;
+        }
         result.appendChild(span);
       });
       hasContent = true;
     }
 
-    // 人脸识别结果（追加到 detect-result，同时更新 face-result）
-    const matched = (faceData.results || []).filter(f => f.matched);
-    if (matched.length) {
-      const sep = document.createElement('span');
-      sep.style.cssText = 'display:block;font-size:10px;color:var(--text3);margin-top:6px;margin-bottom:2px';
-      sep.textContent = '识别到人脸：';
-      result.appendChild(sep);
-      matched.forEach(f => {
-        const span = document.createElement('span');
-        span.className = 'detect-tag';
-        span.style.borderColor = f.confidence === 'high' ? 'var(--green)' : 'var(--amber)';
-        span.style.color = f.confidence === 'high' ? 'var(--green)' : 'var(--amber)';
-        span.textContent = `${f.name} ${(f.similarity*100).toFixed(0)}%`;
-        result.appendChild(span);
-      });
+    // 剩余未消费的人脸（YOLO 没检出 person 但人脸识别有结果）
+    faceQueue.forEach(f => {
+      const span = document.createElement('span');
+      span.className = 'detect-tag';
+      span.style.borderColor = f.confidence === 'high' ? 'var(--green)' : 'var(--amber)';
+      span.style.color      = f.confidence === 'high' ? 'var(--green)' : 'var(--amber)';
+      span.textContent = f.name;
+      span.title = `face · ${(f.similarity*100).toFixed(0)}% ${f.confidence}`;
+      result.appendChild(span);
       hasContent = true;
-      // 同步更新 face-result div
+    });
+
+    // 同步更新 face-result div
+    if (matched.length) {
       faceResult.innerHTML = matched.map(f => {
         const col = f.confidence === 'high' ? 'green' : 'amber';
         const learned = f.learned ? ' <span style="color:var(--amber)">↑学习</span>' : '';
