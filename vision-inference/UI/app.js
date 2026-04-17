@@ -657,9 +657,11 @@ async function registerItem() {
   const progressText = document.getElementById('item-progress-text');
   const progressBar  = document.getElementById('item-progress-bar');
   progressWrap.style.display = '';
-  result.textContent = '';
+  result.innerHTML = '';
+  result.style.color = '';
 
   let succeeded = 0;
+  const errors = [];
   for (let i = 0; i < total; i++) {
     progressText.textContent = `${i} / ${total}`;
     progressBar.style.width = `${Math.round(i / total * 100)}%`;
@@ -671,27 +673,28 @@ async function registerItem() {
       const r = await fetch(API + '/register', { method: 'POST', body: fd });
       const d = await r.json();
       if (d.status === 'ok') succeeded++;
-      else { result.textContent = `✕ 第 ${i+1} 张失败: ${d.error || JSON.stringify(d)}`; result.style.color = 'var(--red)'; }
+      else errors.push(`第 ${i+1} 张: ${d.error || JSON.stringify(d)}`);
     } catch (e) {
-      result.textContent = `✕ 第 ${i+1} 张请求失败: ${e.message}`;
-      result.style.color = 'var(--red)';
+      errors.push(`第 ${i+1} 张请求失败: ${e.message}`);
     }
   }
 
   progressText.textContent = `${total} / ${total}`;
   progressBar.style.width = '100%';
 
-  if (succeeded === total) {
-    result.textContent = `✓ ${label} 注册完成，共 ${total} 张样本`;
-    result.style.color = 'var(--green)';
+  const lines = [];
+  if (succeeded > 0) lines.push(`✓ ${label} 注册 ${succeeded}/${total} 张成功`);
+  errors.forEach(e => lines.push(`✕ ${e}`));
+  result.innerHTML = lines.join('<br>');
+  result.style.color = errors.length === 0 ? 'var(--green)' : (succeeded > 0 ? 'var(--amber)' : 'var(--red)');
+
+  if (errors.length === 0) {
     toast(`✓ ${label} 注册完成 (${total} 张)`, 'ok');
     clearItemFiles();
     document.getElementById('item-label').value = '';
     document.getElementById('item-desc').value = '';
     setTimeout(() => { progressWrap.style.display = 'none'; }, 1500);
   } else {
-    result.textContent = `⚠ ${succeeded}/${total} 张成功`;
-    result.style.color = 'var(--amber)';
     toast(`注册部分失败 (${succeeded}/${total})`, 'err');
   }
   loadItems();
@@ -814,9 +817,11 @@ async function registerFace() {
   const progressText = document.getElementById('face-progress-text');
   const progressBar  = document.getElementById('face-progress-bar');
   progressWrap.style.display = '';
-  result.textContent = '';
+  result.innerHTML = '';
+  result.style.color = '';
 
   let succeeded = 0;
+  const errors = [];
   for (let i = 0; i < total; i++) {
     progressText.textContent = `${i} / ${total}`;
     progressBar.style.width = `${Math.round(i / total * 100)}%`;
@@ -827,26 +832,28 @@ async function registerFace() {
       const r = await fetch(API + '/face/register', { method: 'POST', body: fd });
       const d = await r.json();
       if (d.status === 'ok') succeeded++;
-      else { result.textContent = `✕ 第 ${i+1} 张失败: ${d.error || JSON.stringify(d)}`; result.style.color = 'var(--red)'; }
+      else errors.push(`第 ${i+1} 张: ${d.error || JSON.stringify(d)}`);
     } catch (e) {
-      result.textContent = `✕ 第 ${i+1} 张请求失败: ${e.message}`;
-      result.style.color = 'var(--red)';
+      errors.push(`第 ${i+1} 张请求失败: ${e.message}`);
     }
   }
 
   progressText.textContent = `${total} / ${total}`;
   progressBar.style.width = '100%';
 
-  if (succeeded === total) {
-    result.textContent = `✓ ${name} 注册完成，共 ${total} 张样本`;
-    result.style.color = 'var(--green)';
+  // Build persistent result message
+  const lines = [];
+  if (succeeded > 0) lines.push(`✓ ${name} 注册 ${succeeded}/${total} 张成功`);
+  errors.forEach(e => lines.push(`✕ ${e}`));
+  result.innerHTML = lines.join('<br>');
+  result.style.color = errors.length === 0 ? 'var(--green)' : (succeeded > 0 ? 'var(--amber)' : 'var(--red)');
+
+  if (errors.length === 0) {
     toast(`✓ ${name} 注册完成 (${total} 张)`, 'ok');
     clearFaceFiles();
     document.getElementById('face-name').value = '';
     setTimeout(() => { progressWrap.style.display = 'none'; }, 1500);
   } else {
-    result.textContent = `⚠ ${succeeded}/${total} 张成功`;
-    result.style.color = 'var(--amber)';
     toast(`注册部分失败 (${succeeded}/${total})`, 'err');
   }
   loadFaces();

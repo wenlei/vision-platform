@@ -65,7 +65,12 @@ async def face_register(request: Request,
             existing = cur.fetchone()
 
             if existing:
-                face_id, old_emb, count = existing
+                face_id, old_emb_raw, count = existing
+                # pgvector returns embedding as string "[0.1,0.2,...]" from psycopg2
+                if isinstance(old_emb_raw, str):
+                    old_emb = [float(x) for x in old_emb_raw.strip("[]").split(",")]
+                else:
+                    old_emb = [float(x) for x in old_emb_raw]
                 # 滚动平均 + L2 归一化
                 avg_emb = [
                     (old_emb[i] * count + new_emb[i]) / (count + 1)
@@ -175,8 +180,13 @@ async def face_identify(request: Request,
                     })
                     continue
 
-                face_id, name, label, old_emb, count, similarity = row
+                face_id, name, label, old_emb_raw, count, similarity = row
                 similarity = round(float(similarity), 3)
+                # pgvector returns embedding as string from psycopg2
+                if isinstance(old_emb_raw, str):
+                    old_emb = [float(x) for x in old_emb_raw.strip("[]").split(",")]
+                else:
+                    old_emb = [float(x) for x in old_emb_raw]
 
                 if similarity < low_th:
                     # 完全不认识
