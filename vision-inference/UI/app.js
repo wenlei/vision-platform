@@ -295,26 +295,80 @@ function toggleVFlip()  { sendOrientConfig({ vflip: vflip ? 0 : 1 }); }
 
 // 检测范围选择器
 // ── 检测范围选择器 ────────────────────────────────────────────
+let _multiViewTimer = null;
+
+function _stopMultiView() {
+  if (_multiViewTimer) { clearInterval(_multiViewTimer); _multiViewTimer = null; }
+}
+
+function _startMultiView(macs) {
+  _stopMultiView();
+  const grid = document.getElementById('multi-view-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  macs.forEach(mac => {
+    const wrap = document.createElement('div');
+    wrap.className = 'multi-view-cell';
+    const name = (_devices.find(d => d.mac === mac) || {}).name || mac;
+    wrap.innerHTML = `<div class="multi-view-label">${esc(name)}</div>
+      <img class="multi-view-img" id="mv-${esc(mac.replace(/[^a-z0-9]/gi,''))}" src="" alt="${esc(name)}">`;
+    grid.appendChild(wrap);
+  });
+
+  function refresh() {
+    macs.forEach(mac => {
+      const img = document.getElementById('mv-' + mac.replace(/[^a-z0-9]/gi, ''));
+      if (img) img.src = `${API}/stream/capture/${encodeURIComponent(mac)}?t=${Date.now()}`;
+    });
+  }
+  refresh();
+  _multiViewTimer = setInterval(refresh, 2000);
+}
+
 function setScopeBtn(btn) {
   document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 
   const scope = btn.dataset.scope || 'current';
   const cards = document.querySelectorAll('#cam-bar .cam-card');
-  cards.forEach(card => {
-    if (scope === 'current' || scope === 'all') {
-      card.classList.remove('scope-dim');
-    } else {
-      // scope === 'group:tagname'
-      const tag = scope.replace(/^group:/, '');
+  const streamArea  = document.getElementById('stream-area');
+  const multiGrid   = document.getElementById('multi-view-grid');
+  const livePanel   = document.querySelector('.live-panel');
+
+  if (scope === 'current') {
+    // 单画面：当前设备高亮，其余灰显
+    _stopMultiView();
+    streamArea.style.display = '';
+    if (multiGrid) multiGrid.style.display = 'none';
+    if (livePanel) livePanel.style.display = '';
+    cards.forEach(card => {
+      card.style.display = '';
+      card.classList.toggle('scope-dim', !card.classList.contains('active'));
+    });
+  } else if (scope === 'all') {
+    // 多画面：全部设备，下方显示所有画面网格
+    streamArea.style.display = 'none';
+    if (multiGrid) multiGrid.style.display = '';
+    if (livePanel) livePanel.style.display = 'none';
+    cards.forEach(card => { card.style.display = ''; card.classList.remove('scope-dim'); });
+    const macs = [...cards].map(c => c.dataset.mac).filter(Boolean);
+    _startMultiView(macs);
+  } else {
+    // tag 分组：只显示该 tag 的设备，下方多画面
+    const tag = scope.replace(/^group:/, '');
+    const tagMacs = [];
+    cards.forEach(card => {
       const cardTags = (card.dataset.tag || '').split(/[,;]/).map(t => t.trim());
-      if (cardTags.includes(tag)) {
-        card.classList.remove('scope-dim');
-      } else {
-        card.classList.add('scope-dim');
-      }
-    }
-  });
+      const inGroup = cardTags.includes(tag);
+      card.style.display = inGroup ? '' : 'none';
+      card.classList.remove('scope-dim');
+      if (inGroup && card.dataset.mac) tagMacs.push(card.dataset.mac);
+    });
+    streamArea.style.display = 'none';
+    if (multiGrid) multiGrid.style.display = '';
+    if (livePanel) livePanel.style.display = 'none';
+    _startMultiView(tagMacs);
+  }
 }
 
 let _scopePopulating = false;

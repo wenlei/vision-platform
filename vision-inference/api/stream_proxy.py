@@ -362,6 +362,36 @@ def update_stream_config(body: StreamConfigUpdate):
     return get_stream_config()
 
 
+@router.get("/capture/{mac}")
+async def capture_by_mac(mac: str):
+    """Single JPEG frame from a specific device (by MAC or name), direct from its /capture URL."""
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute(
+                "SELECT stream_url FROM devices WHERE mac = %s OR name = %s LIMIT 1",
+                (mac.upper(), mac),
+            )
+            row = cur.fetchone()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail=f"Device {mac!r} not found or has no stream_url")
+    stream_url = row[0]
+    # Derive /capture from stream_url (strip port/path, add /capture)
+    base = stream_url.rsplit(":", 1)[0]   # http://192.168.50.87
+    capture_url = base + "/capture"
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0)) as client:
+            r = await client.get(capture_url)
+            if r.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"Device returned {r.status_code}")
+            return StreamingResponse(io.BytesIO(r.content), media_type="image/jpeg")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Capture failed: {e}")
+
+
 @router.get("/{mac}")
 async def stream_by_mac(mac: str):
     """Proxy raw MJPEG stream for a specific MAC."""
