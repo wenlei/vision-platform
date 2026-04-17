@@ -129,6 +129,7 @@ class MJPEGBroadcaster:
                                 self.latest_frame = jpeg
                                 self._frame_id += 1
                                 self._last_frame_ts = time.time()
+                                await asyncio.sleep(0)  # yield to subscribers
             except asyncio.CancelledError:
                 log.info("Broadcaster fetch loop cancelled")
                 return
@@ -159,7 +160,7 @@ class MJPEGBroadcaster:
         try:
             while True:
                 while self._frame_id == last_seen:
-                    await asyncio.sleep(0.01)
+                    await asyncio.sleep(0.001)
                 last_seen = self._frame_id
                 yield (
                     b"--frame\r\n"
