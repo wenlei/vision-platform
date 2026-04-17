@@ -694,6 +694,20 @@ input::placeholder { color: var(--text3); }
   box-shadow: var(--shadow-sm);
 }
 
+/* ── Multi-stream grid ───────────────────────────────────── */
+#multi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  align-content: start;
+  background: #111;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
 /* ── Scrollbar ───────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

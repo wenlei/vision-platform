@@ -177,15 +177,26 @@ class MJPEGBroadcaster:
                 await self._maybe_stop()
 
 
-# Module-level broadcaster singleton
-_broadcaster: MJPEGBroadcaster | None = None
+# Module-level broadcaster registry (keyed by stream URL)
+_broadcaster: MJPEGBroadcaster | None = None       # default cam broadcaster
+_broadcasters: dict[str, MJPEGBroadcaster] = {}   # per-URL broadcasters
 
 
 def _get_broadcaster() -> MJPEGBroadcaster:
+    """Return broadcaster for the currently configured default stream."""
     global _broadcaster
-    if _broadcaster is None:
-        _broadcaster = MJPEGBroadcaster(_esp32_stream_url())
+    url = _esp32_stream_url()
+    if _broadcaster is None or _broadcaster.source_url != url:
+        _broadcaster = _get_broadcaster_for(url)
     return _broadcaster
+
+
+def _get_broadcaster_for(url: str) -> MJPEGBroadcaster:
+    """Return (or create) a broadcaster for the given stream URL."""
+    if url not in _broadcasters:
+        _broadcasters[url] = MJPEGBroadcaster(url)
+        log.info("Created broadcaster for %s", url)
+    return _broadcasters[url]
 
 
 # ── Routes ────────────────────────────────────────────────
@@ -353,6 +364,10 @@ def update_stream_config(body: StreamConfigUpdate):
         if _broadcaster is not None and _broadcaster._task and not _broadcaster._task.done():
             _broadcaster._task.cancel()
         _broadcaster = None
+        # Also clean up per-URL broadcaster for old source
+        old_bc = _broadcasters.pop(current_source, None)
+        if old_bc and old_bc._task and not old_bc._task.done():
+            old_bc._task.cancel()
         log.info("Broadcaster reset for new source: %s", body.source)
         current_source = body.source
 
@@ -395,9 +410,26 @@ async def capture_by_mac(mac: str):
 
 @router.get("/{mac}")
 async def stream_by_mac(mac: str):
-    """Proxy raw MJPEG stream for a specific MAC."""
-    bc = _get_broadcaster()
-    log.info("New stream subscriber mac=%s (total: %d)", mac, bc._subscribers + 1)
+    """Proxy raw MJPEG stream for a specific device (by MAC or name)."""
+    # Look up stream_url for this device
+    stream_url = None
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute(
+                "SELECT stream_url FROM devices WHERE mac = %s OR name = %s LIMIT 1",
+                (mac.upper(), mac),
+            )
+            row = cur.fetchone()
+            if row:
+                stream_url = row[0]
+    except Exception as e:
+        log.warning("Failed to look up device %s: %s", mac, e)
+    if not stream_url:
+        # Fall back to default broadcaster
+        bc = _get_broadcaster()
+    else:
+        bc = _get_broadcaster_for(stream_url)
+    log.info("New stream subscriber mac=%s url=%s (total: %d)", mac, stream_url, bc._subscribers + 1)
     return StreamingResponse(
         bc.subscribe(),
         media_type="multipart/x-mixed-replace; boundary=frame",

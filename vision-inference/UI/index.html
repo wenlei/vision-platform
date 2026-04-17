@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vision Platform</title>
-<link rel="stylesheet" href="/ui/style.css?v=20260417f">
+<link rel="stylesheet" href="/ui/style.css?v=20260417g">
 </head>
 <body>
 
@@ -59,8 +59,8 @@
       <div class="row">
         <button class="btn" id="btn-stream" onclick="toggleStream()">⏹ 断开</button>
         <div class="scope-bar" id="scope-bar">
-          <button class="scope-btn active" data-scope="current" onclick="setScopeBtn(this)">📷 当前</button>
-          <button class="scope-btn" data-scope="all" onclick="setScopeBtn(this)">🌐 全部</button>
+          <button class="scope-btn active" data-scope="current" onclick="setScopeBtn(this,true)">📷 当前</button>
+          <button class="scope-btn" data-scope="all" onclick="setScopeBtn(this,true)">🌐 全部</button>
         </div>
         <button class="btn primary" onclick="triggerScopedDetect()">⚡ 检测</button>
         <button class="btn" onclick="screenshot()">💾 截屏</button>
@@ -533,6 +533,6 @@
 
 <div id="toast"></div>
 
-<script src="/ui/app.js?v=20260417f"></script>
+<script src="/ui/app.js?v=20260417g"></script>
 </body>
 </html>

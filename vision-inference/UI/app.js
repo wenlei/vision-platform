@@ -78,6 +78,12 @@ async function pollStreamHealth() {
     document.getElementById('live-dot').classList.remove('active');
     return;
   }
+  if (_multiStreamMode) {
+    // In multi-stream mode, show LIVE if any polls are running
+    const hasPolls = Object.keys(_multiStreamTimers).length > 0;
+    document.getElementById('live-dot').classList.toggle('active', hasPolls);
+    return;
+  }
   try {
     const r = await fetch(API + '/stream/health', { signal: AbortSignal.timeout(2000) });
     const d = await r.json();
@@ -110,13 +116,175 @@ let _currentCamIp  = 'unknown';
 let _currentCamMac = '';
 let _devices = [];  // cache for scope highlighting
 
+// Multi-stream state
+let _multiStreamTimers = {};  // mac → intervalId
+let _multiStreamMode = false;
+
+function _getActiveScopeDevices() {
+  /** Return device objects visible in current scope. */
+  const active = document.querySelector('.scope-btn.active');
+  const scope = active?.dataset.scope || 'current';
+  if (scope === 'current') {
+    // Just the active device
+    const card = document.querySelector('#cam-bar .cam-card.active');
+    const mac = card?.dataset.mac || '';
+    return mac ? _devices.filter(d => d.mac === mac) : [];
+  } else if (scope === 'all') {
+    return _devices.filter(d => d.stream_url);
+  } else {
+    const tag = scope.replace(/^group:/, '');
+    return _devices.filter(d => {
+      if (!d.stream_url) return false;
+      const tags = (d.tag || '').split(/[,;]/).map(t => t.trim());
+      return tags.includes(tag);
+    });
+  }
+}
+
+function _makeTransform(d) {
+  let t = '';
+  if (d.hmirror) t += ' scaleX(-1)';
+  if (d.vflip)   t += ' scaleY(-1)';
+  if (d.rotate)  t += ` rotate(${d.rotate}deg)`;
+  return t.trim() || 'none';
+}
+
+function _startMultiStream(devs) {
+  _multiStreamMode = true;
+  const area = document.getElementById('stream-area');
+  // Remove the single-stream img and hide offline msg
+  const singleImg = document.getElementById('stream-img');
+  singleImg.src = '';
+  singleImg.style.display = 'none';
+  document.getElementById('stream-offline').style.display = 'none';
+
+  // Clear any existing multi-grid
+  const existing = document.getElementById('multi-grid');
+  if (existing) existing.remove();
+
+  if (!devs.length) {
+    document.getElementById('stream-offline-msg').textContent = '该范围内无设备';
+    document.getElementById('stream-offline').style.display = 'flex';
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.id = 'multi-grid';
+  area.appendChild(grid);
+
+  devs.forEach(d => {
+    const tile = document.createElement('div');
+    tile.style.cssText = 'position:relative;background:#1a1a1a;display:flex;align-items:center;justify-content:center;min-height:200px;overflow:hidden;border:2px solid transparent;cursor:pointer;transition:border-color 0.12s';
+    tile.dataset.mac = d.mac || '';
+    tile.onclick = () => {
+      if (d.stream_url) switchDevice(d.stream_url);
+    };
+    tile.onmouseenter = () => tile.style.borderColor = 'var(--accent)';
+    tile.onmouseleave = () => tile.style.borderColor = 'transparent';
+
+    const img = document.createElement('img');
+    img.style.cssText = 'max-width:100%;max-height:300px;object-fit:contain;display:none';
+    img.style.transform = _makeTransform(d);
+    img.alt = d.name || d.mac;
+
+    const label = document.createElement('div');
+    label.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:4px 8px;background:rgba(0,0,0,0.55);font-size:11px;color:#ddd;font-weight:600;pointer-events:none';
+    label.textContent = d.name || d.mac;
+
+    const offMsg = document.createElement('div');
+    offMsg.style.cssText = 'position:absolute;color:#555;font-size:11px;text-align:center';
+    offMsg.textContent = '等待画面...';
+
+    tile.appendChild(img);
+    tile.appendChild(offMsg);
+    tile.appendChild(label);
+    grid.appendChild(tile);
+
+    // Start snapshot polling for this device
+    if (d.mac && streaming) {
+      const offMsg = tile.querySelector('div[style*="等待画面"]');
+      _pollSnapshot(d.mac, img, offMsg);
+    }
+  });
+}
+
+function _pollSnapshot(mac, img, offMsg) {
+  if (_multiStreamTimers[mac]) {
+    clearInterval(_multiStreamTimers[mac]);
+  }
+  let polling = true;
+  async function doFetch() {
+    if (!polling || !streaming) return;
+    try {
+      const url = API + '/stream/capture/' + encodeURIComponent(mac) + '?' + Date.now();
+      const r = await fetch(url, { signal: AbortSignal.timeout(2000) });
+      if (r.ok) {
+        const blob = await r.blob();
+        const old = img._blobUrl;
+        img._blobUrl = URL.createObjectURL(blob);
+        img.src = img._blobUrl;
+        img.style.display = '';
+        if (offMsg) offMsg.style.display = 'none';
+        if (old) URL.revokeObjectURL(old);
+      }
+    } catch {}
+  }
+  doFetch();
+  _multiStreamTimers[mac] = setInterval(doFetch, 120);
+  // Store cleanup fn
+  img._stopPoll = () => {
+    polling = false;
+    clearInterval(_multiStreamTimers[mac]);
+    delete _multiStreamTimers[mac];
+    if (img._blobUrl) { URL.revokeObjectURL(img._blobUrl); img._blobUrl = null; }
+  };
+}
+
+function _stopMultiStream() {
+  _multiStreamMode = false;
+  // Stop all snapshot timers
+  Object.keys(_multiStreamTimers).forEach(mac => {
+    clearInterval(_multiStreamTimers[mac]);
+    delete _multiStreamTimers[mac];
+  });
+  // Stop poll on all imgs and revoke blob URLs
+  document.querySelectorAll('#multi-grid img').forEach(img => {
+    if (img._stopPoll) img._stopPoll();
+  });
+  const grid = document.getElementById('multi-grid');
+  if (grid) grid.remove();
+}
+
 function initStream() {
-  const img = document.getElementById('stream-img');
-  img.src = API + '/stream?' + Date.now();
-  img.style.display = '';
   streaming = true;
   document.getElementById('btn-stream').textContent = '⏹ 断开';
   document.getElementById('btn-stream').className = 'btn connected';
+  document.getElementById('stream-offline').style.display = 'none';
+
+  const scope = document.querySelector('.scope-btn.active')?.dataset.scope || 'current';
+  if (scope === 'current') {
+    _startSingleStream();
+  } else {
+    // Multi-stream — need devices loaded
+    const devs = _getActiveScopeDevices();
+    if (devs.length) {
+      _startMultiStream(devs);
+    } else {
+      // Devices not loaded yet — load then start
+      loadCamBar().then(() => {
+        const d2 = _getActiveScopeDevices();
+        _startMultiStream(d2);
+      });
+    }
+  }
+}
+
+function _startSingleStream() {
+  _stopMultiStream();
+  const img = document.getElementById('stream-img');
+  img.src = API + '/stream?' + Date.now();
+  img.style.display = '';
+  document.getElementById('live-dot').classList.add('active');
   loadOrientConfig();
   loadCamBar();
 }
@@ -125,6 +293,7 @@ function stopStream() {
   const img = document.getElementById('stream-img');
   img.src = '';
   img.style.display = 'none';
+  _stopMultiStream();
   streaming = false;
   document.getElementById('stream-offline-msg').textContent = '已断开';
   document.getElementById('stream-offline').style.display = 'flex';
@@ -258,8 +427,6 @@ function applyCSSTransform() {
 function onStreamError() {
   document.getElementById('stream-img').style.display = 'none';
   document.getElementById('stream-offline').style.display = 'flex';
-  document.getElementById('live-status').textContent = '离线';
-  document.getElementById('live-status').className = 'badge red';
 }
 
 function updateOrientBtns() {
@@ -299,7 +466,7 @@ function toggleVFlip()  { sendOrientConfig({ vflip: vflip ? 0 : 1 }); }
 // 检测范围选择器
 // ── 检测范围选择器 ────────────────────────────────────────────
 
-function setScopeBtn(btn) {
+function setScopeBtn(btn, fromUser = false) {
   document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 
@@ -312,12 +479,19 @@ function setScopeBtn(btn) {
       card.style.display = '';
       card.classList.toggle('scope-dim', !card.classList.contains('active'));
     });
+    // Switch from multi to single stream only on user action
+    if (fromUser && streaming && _multiStreamMode) {
+      _stopMultiStream();
+      _startSingleStream();
+    }
   } else if (scope === 'all') {
     // 全部显示，全部可点击
     cards.forEach(card => {
       card.style.display = '';
       card.classList.remove('scope-dim');
     });
+    // Switch to multi-stream only on user action
+    if (fromUser && streaming) _applyMultiStreamForScope();
   } else {
     // tag 分组：只显示该 tag 的设备
     const tag = scope.replace(/^group:/, '');
@@ -326,6 +500,28 @@ function setScopeBtn(btn) {
       const inGroup = cardTags.includes(tag);
       card.style.display = inGroup ? '' : 'none';
       card.classList.remove('scope-dim');
+    });
+    // Switch to multi-stream tag-filtered only on user action
+    if (fromUser && streaming) _applyMultiStreamForScope();
+  }
+}
+
+function _applyMultiStreamForScope() {
+  // Stop old multi-stream (or single stream)
+  if (_multiStreamMode) _stopMultiStream();
+  else {
+    const img = document.getElementById('stream-img');
+    img.src = '';
+    img.style.display = 'none';
+  }
+  const devs = _getActiveScopeDevices();
+  if (devs.length) {
+    _startMultiStream(devs);
+  } else {
+    // Devices not loaded yet — fetch first, then start
+    loadCamBar().then(() => {
+      const d2 = _getActiveScopeDevices();
+      _startMultiStream(d2);
     });
   }
 }
@@ -351,7 +547,7 @@ async function populateDetectScope() {
       btn.className = 'scope-btn';
       btn.dataset.scope = 'group:' + tag;
       btn.textContent = '🏷 ' + tag;
-      btn.onclick = () => setScopeBtn(btn);
+      btn.onclick = () => setScopeBtn(btn, true);
       bar.appendChild(btn);
     });
   } catch {}
