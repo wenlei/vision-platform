@@ -402,22 +402,36 @@ async function _triggerMultiDetect(url, label) {
   }
 }
 
-// 检测
+// 检测（YOLO + 人脸识别并行）
 async function triggerDetect() {
   const result = document.getElementById('detect-result');
+  const faceResult = document.getElementById('face-result');
   result.innerHTML = '<span style="color:var(--text3)">拍照中...</span>';
   try {
     const capR = await fetch(API + '/stream/capture');
     if (!capR.ok) { result.textContent = '拍照失败：摄像头离线'; result.style.color = 'var(--red)'; return; }
     const blob = await capR.blob();
     result.innerHTML = '<span style="color:var(--text3)">识别中...</span>';
-    const fd = new FormData();
-    fd.append('file', blob, 'capture.jpg');
-    fd.append('camera_ip', _currentCamIp);
-    if (_currentCamMac) fd.append('device_mac', _currentCamMac);
-    const detectR = await fetch(API + '/describe', { method: 'POST', body: fd });
-    const data = await detectR.json();
+
+    // 并行发起 YOLO 描述 + 人脸识别
+    const fdDetect = new FormData();
+    fdDetect.append('file', blob, 'capture.jpg');
+    fdDetect.append('camera_ip', _currentCamIp);
+    if (_currentCamMac) fdDetect.append('device_mac', _currentCamMac);
+
+    const fdFace = new FormData();
+    fdFace.append('file', blob, 'capture.jpg');
+
+    const [detectR, faceR] = await Promise.all([
+      fetch(API + '/describe', { method: 'POST', body: fdDetect }),
+      fetch(API + '/face/identify', { method: 'POST', body: fdFace }),
+    ]);
+    const [data, faceData] = await Promise.all([detectR.json(), faceR.json()]);
+
     result.innerHTML = '';
+    let hasContent = false;
+
+    // YOLO 标签
     if (data.description && data.description !== 'No objects detected') {
       const tags = (data.description.replace('Detected: ', '')).split(', ');
       tags.forEach(t => {
@@ -426,7 +440,36 @@ async function triggerDetect() {
         span.textContent = t.trim();
         result.appendChild(span);
       });
-    } else {
+      hasContent = true;
+    }
+
+    // 人脸识别结果（追加到 detect-result，同时更新 face-result）
+    const matched = (faceData.results || []).filter(f => f.matched);
+    if (matched.length) {
+      const sep = document.createElement('span');
+      sep.style.cssText = 'display:block;font-size:10px;color:var(--text3);margin-top:6px;margin-bottom:2px';
+      sep.textContent = '识别到人脸：';
+      result.appendChild(sep);
+      matched.forEach(f => {
+        const span = document.createElement('span');
+        span.className = 'detect-tag';
+        span.style.borderColor = f.confidence === 'high' ? 'var(--green)' : 'var(--amber)';
+        span.style.color = f.confidence === 'high' ? 'var(--green)' : 'var(--amber)';
+        span.textContent = `${f.name} ${(f.similarity*100).toFixed(0)}%`;
+        result.appendChild(span);
+      });
+      hasContent = true;
+      // 同步更新 face-result div
+      faceResult.innerHTML = matched.map(f => {
+        const col = f.confidence === 'high' ? 'green' : 'amber';
+        const learned = f.learned ? ' <span style="color:var(--amber)">↑学习</span>' : '';
+        return `<div style="color:var(--${esc(col)})">${esc(f.name)} ${(f.similarity*100).toFixed(0)}%${learned}</div>`;
+      }).join('');
+    } else if (faceData.results && faceData.results.length > 0) {
+      faceResult.innerHTML = '<span style="color:var(--text3)">未识别到已注册人脸</span>';
+    }
+
+    if (!hasContent) {
       result.innerHTML = '<span style="color:var(--text3)">未检测到物体</span>';
     }
   } catch(e) {
