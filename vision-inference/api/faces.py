@@ -41,6 +41,14 @@ async def face_register(request: Request,
     contents = await file.read()
     img_pil = Image.open(io.BytesIO(contents)).convert("RGB")
     img_pil = apply_orientation(img_pil)
+    # Upscale small images so InsightFace can detect small/distant faces
+    max_dim = max(img_pil.width, img_pil.height)
+    if max_dim < 960:
+        scale = 960 / max_dim
+        img_pil = img_pil.resize(
+            (int(img_pil.width * scale), int(img_pil.height * scale)),
+            Image.LANCZOS,
+        )
     img_np = np.array(img_pil)
 
     faces = face_app.get(img_np)
@@ -147,6 +155,14 @@ async def face_identify(request: Request,
     contents = await file.read()
     img_pil = Image.open(io.BytesIO(contents)).convert("RGB")
     img_pil = apply_orientation(img_pil)
+    # Upscale small images so InsightFace can detect small/distant faces
+    max_dim = max(img_pil.width, img_pil.height)
+    if max_dim < 960:
+        scale = 960 / max_dim
+        img_pil = img_pil.resize(
+            (int(img_pil.width * scale), int(img_pil.height * scale)),
+            Image.LANCZOS,
+        )
     img_np = np.array(img_pil)
 
     faces = face_app.get(img_np)

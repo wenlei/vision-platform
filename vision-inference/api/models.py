@@ -64,6 +64,7 @@ face_app = insightface.app.FaceAnalysis(
 face_app.prepare(
     ctx_id=0 if DEVICE == "cuda" else -1,
     det_size=(640, 640),
+    det_thresh=0.35,   # lower from default ~0.5 to catch faces in difficult conditions
 )
 log.info("InsightFace loaded OK")
 
