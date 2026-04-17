@@ -423,7 +423,7 @@ async function triggerDetect() {
     fdFace.append('file', blob, 'capture.jpg');
 
     const [detectR, faceR] = await Promise.all([
-      fetch(API + '/describe', { method: 'POST', body: fdDetect }),
+      fetch(API + '/detect', { method: 'POST', body: fdDetect }),
       fetch(API + '/face/identify', { method: 'POST', body: fdFace }),
     ]);
     const [data, faceData] = await Promise.all([detectR.json(), faceR.json()]);
