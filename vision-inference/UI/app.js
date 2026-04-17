@@ -215,7 +215,10 @@ async function loadCamBar() {
   } catch {
     bar.innerHTML = '<span style="color:var(--red);font-size:11px">设备加载失败</span>';
   }
-  populateDetectScope();
+  await populateDetectScope();
+  // Re-apply scope dim state after cam-bar re-render
+  const activeScope = document.querySelector('.scope-btn.active');
+  if (activeScope) setScopeBtn(activeScope);
 }
 
 async function switchDevice(streamUrl) {

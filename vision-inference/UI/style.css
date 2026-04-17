@@ -214,7 +214,6 @@ nav.collapsed .nav-footer { justify-content: center; padding: 12px 0; }
 .cam-card.scope-dim {
   opacity: 0.35;
   filter: grayscale(0.6);
-  pointer-events: none;
 }
 .cam-card-name { font-size: 12px; font-weight: 600; color: var(--text); }
 .cam-card-meta { font-size: 10px; color: var(--text3); margin-top: 1px; }
