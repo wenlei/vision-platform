@@ -168,13 +168,27 @@ function _startMultiStream(devs) {
     return;
   }
 
+  // Calculate grid columns/rows to evenly divide the display area
+  const n = devs.length;
+  const cols = Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+
   const grid = document.createElement('div');
   grid.id = 'multi-grid';
+  grid.style.cssText = [
+    'position:absolute;top:0;left:0;right:0;bottom:0',
+    'display:grid',
+    `grid-template-columns:repeat(${cols},1fr)`,
+    `grid-template-rows:repeat(${rows},1fr)`,
+    'gap:2px',
+    'background:#111',
+    'overflow:hidden',
+  ].join(';');
   area.appendChild(grid);
 
   devs.forEach(d => {
     const tile = document.createElement('div');
-    tile.style.cssText = 'position:relative;background:#1a1a1a;display:flex;align-items:center;justify-content:center;min-height:200px;overflow:hidden;border:2px solid transparent;cursor:pointer;transition:border-color 0.12s';
+    tile.style.cssText = 'position:relative;background:#1a1a1a;display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid transparent;cursor:pointer;transition:border-color 0.12s';
     tile.dataset.mac = d.mac || '';
     tile.onclick = () => {
       if (d.stream_url) switchDevice(d.stream_url);
@@ -183,13 +197,13 @@ function _startMultiStream(devs) {
     tile.onmouseleave = () => tile.style.borderColor = 'transparent';
 
     const img = document.createElement('img');
-    img.style.cssText = 'max-width:100%;max-height:300px;object-fit:contain;display:none';
+    img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:none';
     img.style.transform = _makeTransform(d);
     img.alt = d.name || d.mac;
 
     const label = document.createElement('div');
     label.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:4px 8px;background:rgba(0,0,0,0.55);font-size:11px;color:#ddd;font-weight:600;pointer-events:none';
-    label.textContent = d.name || d.mac;
+    label.textContent = d.name || (d.mac || '');
 
     const offMsg = document.createElement('div');
     offMsg.style.cssText = 'position:absolute;color:#555;font-size:11px;text-align:center';
@@ -202,7 +216,6 @@ function _startMultiStream(devs) {
 
     // Start snapshot polling for this device
     if (d.mac && streaming) {
-      const offMsg = tile.querySelector('div[style*="等待画面"]');
       _pollSnapshot(d.mac, img, offMsg);
     }
   });
