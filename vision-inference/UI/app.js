@@ -79,9 +79,9 @@ async function pollStreamHealth() {
     return;
   }
   if (_multiStreamMode) {
-    // In multi-stream mode, show LIVE if any polls are running
-    const hasPolls = Object.keys(_multiStreamTimers).length > 0;
-    document.getElementById('live-dot').classList.toggle('active', hasPolls);
+    // In multi-stream mode, show LIVE if MJPEG tiles are present
+    const hasGrid = !!document.getElementById('multi-grid');
+    document.getElementById('live-dot').classList.toggle('active', hasGrid);
     return;
   }
   try {
@@ -117,7 +117,6 @@ let _currentCamMac = '';
 let _devices = [];  // cache for scope highlighting
 
 // Multi-stream state
-let _multiStreamTimers = {};  // mac → intervalId
 let _multiStreamMode = false;
 
 function _getActiveScopeDevices() {
@@ -152,7 +151,7 @@ function _makeTransform(d) {
 function _startMultiStream(devs) {
   _multiStreamMode = true;
   const area = document.getElementById('stream-area');
-  // Remove the single-stream img and hide offline msg
+  // Hide single-stream img and offline msg
   const singleImg = document.getElementById('stream-img');
   singleImg.src = '';
   singleImg.style.display = 'none';
@@ -160,7 +159,10 @@ function _startMultiStream(devs) {
 
   // Clear any existing multi-grid
   const existing = document.getElementById('multi-grid');
-  if (existing) existing.remove();
+  if (existing) {
+    existing.querySelectorAll('img[data-mjpeg]').forEach(i => { i.src = ''; });
+    existing.remove();
+  }
 
   if (!devs.length) {
     document.getElementById('stream-offline-msg').textContent = '该范围内无设备';
@@ -188,84 +190,39 @@ function _startMultiStream(devs) {
 
   devs.forEach(d => {
     const tile = document.createElement('div');
-    tile.style.cssText = 'position:relative;background:#1a1a1a;display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid transparent;cursor:pointer;transition:border-color 0.12s';
+    tile.style.cssText = 'position:relative;background:#1a1a1a;overflow:hidden;border:2px solid transparent;cursor:pointer;transition:border-color 0.12s';
     tile.dataset.mac = d.mac || '';
-    tile.onclick = () => {
-      if (d.stream_url) switchDevice(d.stream_url);
-    };
-    tile.onmouseenter = () => tile.style.borderColor = 'var(--accent)';
-    tile.onmouseleave = () => tile.style.borderColor = 'transparent';
-
-    const img = document.createElement('img');
-    img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:none';
-    img.style.transform = _makeTransform(d);
-    img.alt = d.name || d.mac;
+    tile.onclick = () => { if (d.stream_url) switchDevice(d.stream_url); };
+    tile.onmouseenter = () => { tile.style.borderColor = 'var(--accent)'; };
+    tile.onmouseleave = () => { tile.style.borderColor = 'transparent'; };
 
     const label = document.createElement('div');
-    label.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:4px 8px;background:rgba(0,0,0,0.55);font-size:11px;color:#ddd;font-weight:600;pointer-events:none';
-    label.textContent = d.name || (d.mac || '');
+    label.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:4px 8px;background:rgba(0,0,0,0.55);font-size:11px;color:#ddd;font-weight:600;pointer-events:none;z-index:1';
+    label.textContent = d.name || d.mac || '';
 
-    const offMsg = document.createElement('div');
-    offMsg.style.cssText = 'position:absolute;color:#555;font-size:11px;text-align:center';
-    offMsg.textContent = '等待画面...';
+    // Use direct MJPEG stream — browser handles fan-out via broadcaster
+    const identifier = encodeURIComponent(d.name || d.mac || '');
+    const img = document.createElement('img');
+    img.dataset.mjpeg = '1';
+    img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block';
+    img.style.transform = _makeTransform(d);
+    img.alt = d.name || d.mac;
+    img.src = `${API}/stream/${identifier}?t=${Date.now()}`;
 
     tile.appendChild(img);
-    tile.appendChild(offMsg);
     tile.appendChild(label);
     grid.appendChild(tile);
-
-    // Start snapshot polling for this device
-    if (d.mac && streaming) {
-      _pollSnapshot(d.mac, img, offMsg);
-    }
   });
-}
-
-function _pollSnapshot(mac, img, offMsg) {
-  if (_multiStreamTimers[mac]) {
-    clearInterval(_multiStreamTimers[mac]);
-  }
-  let polling = true;
-  async function doFetch() {
-    if (!polling || !streaming) return;
-    try {
-      const url = API + '/stream/capture/' + encodeURIComponent(mac) + '?' + Date.now();
-      const r = await fetch(url, { signal: AbortSignal.timeout(2000) });
-      if (r.ok) {
-        const blob = await r.blob();
-        const old = img._blobUrl;
-        img._blobUrl = URL.createObjectURL(blob);
-        img.src = img._blobUrl;
-        img.style.display = '';
-        if (offMsg) offMsg.style.display = 'none';
-        if (old) URL.revokeObjectURL(old);
-      }
-    } catch {}
-  }
-  doFetch();
-  _multiStreamTimers[mac] = setInterval(doFetch, 120);
-  // Store cleanup fn
-  img._stopPoll = () => {
-    polling = false;
-    clearInterval(_multiStreamTimers[mac]);
-    delete _multiStreamTimers[mac];
-    if (img._blobUrl) { URL.revokeObjectURL(img._blobUrl); img._blobUrl = null; }
-  };
 }
 
 function _stopMultiStream() {
   _multiStreamMode = false;
-  // Stop all snapshot timers
-  Object.keys(_multiStreamTimers).forEach(mac => {
-    clearInterval(_multiStreamTimers[mac]);
-    delete _multiStreamTimers[mac];
-  });
-  // Stop poll on all imgs and revoke blob URLs
-  document.querySelectorAll('#multi-grid img').forEach(img => {
-    if (img._stopPoll) img._stopPoll();
-  });
   const grid = document.getElementById('multi-grid');
-  if (grid) grid.remove();
+  if (grid) {
+    // Set src='' to disconnect MJPEG streams before removing
+    grid.querySelectorAll('img[data-mjpeg]').forEach(i => { i.src = ''; });
+    grid.remove();
+  }
 }
 
 function initStream() {
