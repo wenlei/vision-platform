@@ -37,6 +37,7 @@ ALTER TABLE devices ADD COLUMN IF NOT EXISTS rotate       SMALLINT NOT NULL DEFA
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS hmirror      SMALLINT NOT NULL DEFAULT 0;
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS vflip        SMALLINT NOT NULL DEFAULT 0;
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_default   BOOLEAN  NOT NULL DEFAULT FALSE;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS tag          VARCHAR(64);
 
 -- -------------------------------------------------------------
 -- vision_log  检测记录表
@@ -87,6 +88,8 @@ CREATE TABLE IF NOT EXISTS tag_endpoints (
     endpoint_key VARCHAR(64) NOT NULL,
     PRIMARY KEY (tag, endpoint_key)
 );
+-- -------------------------------------------------------------
+-- custom_items  自定义物品注册表
 --   存储用户注册的自定义物品（钥匙、水杯等非 YOLO 标准类别）。
 --   embedding 为 CLIP ViT-B/32 生成的 512 维语义向量，
 --   支持 few-shot 追加样本（滚动平均更新），sample_count 记录样本数。
@@ -130,6 +133,8 @@ CREATE INDEX IF NOT EXISTS idx_faces_embedding
     ON faces USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
 -- 按姓名查询（注册/更新时判重）
 CREATE INDEX IF NOT EXISTS idx_faces_name ON faces (name);
+-- 幂等添加新列（已有旧表时）
+ALTER TABLE faces ADD COLUMN IF NOT EXISTS sample_count INTEGER NOT NULL DEFAULT 1;
 
 -- -------------------------------------------------------------
 -- update_updated_at  触发器函数
