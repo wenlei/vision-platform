@@ -600,37 +600,24 @@ async function _triggerMultiDetect(url, label) {
   }
 }
 
-// 检测（YOLO + 人脸识别并行）
+// 检测（服务端抓帧 → YOLO + CLIP + 人脸识别，全部入库）
 async function triggerDetect() {
   const result = document.getElementById('detect-result');
   const faceResult = document.getElementById('face-result');
-  result.innerHTML = '<span style="color:var(--text3)">拍照中...</span>';
+  result.innerHTML = '<span style="color:var(--text3)">识别中...</span>';
   try {
-    const capR = await fetch(API + '/stream/capture');
-    if (!capR.ok) { result.textContent = '拍照失败：摄像头离线'; result.style.color = 'var(--red)'; return; }
-    const blob = await capR.blob();
-    result.innerHTML = '<span style="color:var(--text3)">识别中...</span>';
-
-    // 并行发起 YOLO 描述 + 人脸识别
-    const fdDetect = new FormData();
-    fdDetect.append('file', blob, 'capture.jpg');
-    fdDetect.append('camera_ip', _currentCamIp);
-    if (_currentCamMac) fdDetect.append('device_mac', _currentCamMac);
-
-    const fdFace = new FormData();
-    fdFace.append('file', blob, 'capture.jpg');
-
-    const [detectR, faceR] = await Promise.all([
-      fetch(API + '/detect', { method: 'POST', body: fdDetect }),
-      fetch(API + '/face/identify', { method: 'POST', body: fdFace }),
-    ]);
-    const [data, faceData] = await Promise.all([detectR.json(), faceR.json()]);
+    // 使用服务端抓帧接口，人脸识别已在服务端完成并写入 DB
+    const mac = _currentCamMac;
+    if (!mac) { result.textContent = '未选择设备'; result.style.color = 'var(--red)'; return; }
+    const detectR = await fetch(API + '/detect/' + encodeURIComponent(mac), { method: 'POST' });
+    if (!detectR.ok) { result.textContent = '检测失败：' + detectR.status; result.style.color = 'var(--red)'; return; }
+    const data = await detectR.json();
 
     result.innerHTML = '';
     let hasContent = false;
 
-    // 人脸识别结果（用于替换 person 标签）
-    const matched = (faceData.results || []).filter(f => f.matched);
+    // 人脸识别结果（来自服务端，已入库）
+    const matched = (data.face_results || []);
     const faceQueue = [...matched]; // 依次消费，支持多人
 
     // YOLO 标签（person → 替换为识别到的人名）
@@ -673,10 +660,9 @@ async function triggerDetect() {
     if (matched.length) {
       faceResult.innerHTML = matched.map(f => {
         const col = f.confidence === 'high' ? 'green' : 'amber';
-        const learned = f.learned ? ' <span style="color:var(--amber)">↑学习</span>' : '';
-        return `<div style="color:var(--${esc(col)})">${esc(f.name)} ${(f.similarity*100).toFixed(0)}%${learned}</div>`;
+        return `<div style="color:var(--${esc(col)})">${esc(f.name)} ${(f.similarity*100).toFixed(0)}%</div>`;
       }).join('');
-    } else if (faceData.results && faceData.results.length > 0) {
+    } else if (data.detections && data.detections.some(d => d.label === 'person')) {
       faceResult.innerHTML = '<span style="color:var(--text3)">未识别到已注册人脸</span>';
     }
 

@@ -16,11 +16,11 @@ import numpy as np
 from fastapi import APIRouter, UploadFile, File, Form, Request
 from PIL import Image
 
-from api.models import yolo, clip_model, clip_preprocess, get_clip_embedding, DEVICE
+from api.models import yolo, clip_model, clip_preprocess, get_clip_embedding, face_app, DEVICE
 from api.db import get_conn, save_to_db
 from api.storage import save_image_file, save_annotated_file, apply_orientation
 from api.device_layer import get_device_tag
-from api.config import cfg
+from api.config import cfg, face_thresholds
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -117,6 +117,45 @@ def _match_bbox_custom_items(img: Image.Image, boxes, threshold=0.60):
     return list(best.values())
 
 
+def _identify_faces(img: Image.Image, labels: list) -> list:
+    """Run InsightFace on the image if 'person' was detected. Returns matched face list."""
+    if "person" not in labels:
+        return []
+    try:
+        high_th, low_th = face_thresholds()
+        img_f = img
+        max_dim = max(img_f.width, img_f.height)
+        if max_dim < 960:
+            scale = 960 / max_dim
+            img_f = img_f.resize(
+                (int(img_f.width * scale), int(img_f.height * scale)), Image.LANCZOS
+            )
+        faces = face_app.get(np.array(img_f))
+        if not faces:
+            return []
+        results = []
+        with get_conn() as (conn, cur):
+            for face in faces:
+                emb = face.embedding.tolist()
+                cur.execute(
+                    "SELECT name, 1-(embedding<=>%s::vector) AS sim "
+                    "FROM faces ORDER BY embedding<=>%s::vector LIMIT 1",
+                    (str(emb), str(emb))
+                )
+                row = cur.fetchone()
+                if row:
+                    name, sim = row[0], round(float(row[1]), 3)
+                    if sim >= low_th:
+                        results.append({
+                            "name": name, "similarity": sim,
+                            "confidence": "high" if sim >= high_th else "low",
+                        })
+        return results
+    except Exception as e:
+        log.warning("Face recognition in detect: %s", e)
+        return []
+
+
 @router.post("/detect")
 async def detect(request: Request,
                  file: UploadFile = File(...),
@@ -161,13 +200,17 @@ async def detect(request: Request,
     bbox_matches = _match_bbox_custom_items(img, detections)
     custom_matches = [(m["custom_label"], m["custom_sim"]) for m in bbox_matches]
 
+    # 人脸识别（检测到 person 时）
+    face_results = _identify_faces(img, labels)
+    face_names = [f["name"] for f in face_results]
+
     # 保存图片
     annotated = results[0].plot()
     image_path = save_image_file(img, tag)
     ann_path = save_annotated_file(annotated, tag)
 
     # 生成描述
-    all_labels = labels + [m[0] for m in custom_matches]
+    all_labels = labels + [m[0] for m in custom_matches] + face_names
     counts = Counter(all_labels)
     desc = ("Detected: " + ", ".join(
         f"{v}x{k}" if v > 1 else k for k, v in counts.items()
@@ -177,13 +220,14 @@ async def detect(request: Request,
     device_name, location = save_to_db(
         ip, all_labels, desc, image_path, conf_data,
         {"detections": detections, "custom_matches": custom_matches,
-         "annotated": ann_path},
+         "face_results": face_results, "annotated": ann_path},
         mac
     )
 
     return {
         "detections": detections,
         "custom_matches": custom_matches,
+        "face_results": face_results,
         "count": len(detections),
         "description": desc,
         "image_path": image_path,
@@ -302,11 +346,15 @@ def _run_detect_on_bytes(contents: bytes, mac: str, ip: str):
     bbox_matches = _match_bbox_custom_items(img, detections)
     custom_matches = [(m["custom_label"], m["custom_sim"]) for m in bbox_matches]
 
+    # 人脸识别（检测到 person 时）
+    face_results = _identify_faces(img, labels)
+    face_names = [f["name"] for f in face_results]
+
     annotated = results[0].plot()
     image_path = save_image_file(img, tag)
     ann_path = save_annotated_file(annotated, tag)
 
-    all_labels = labels + [m[0] for m in custom_matches]
+    all_labels = labels + [m[0] for m in custom_matches] + face_names
     counts = Counter(all_labels)
     desc = ("Detected: " + ", ".join(
         f"{v}x{k}" if v > 1 else k for k, v in counts.items()
@@ -314,12 +362,14 @@ def _run_detect_on_bytes(contents: bytes, mac: str, ip: str):
 
     device_name, location = save_to_db(
         ip, all_labels, desc, image_path, conf_data,
-        {"detections": detections, "custom_matches": custom_matches, "annotated": ann_path},
+        {"detections": detections, "custom_matches": custom_matches,
+         "face_results": face_results, "annotated": ann_path},
         mac
     )
     return {
         "detections": detections,
         "custom_matches": custom_matches,
+        "face_results": face_results,
         "count": len(detections),
         "description": desc,
         "image_path": image_path,
