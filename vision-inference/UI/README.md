@@ -1,5 +1,7 @@
 # Vision Platform UI
 
+> **Version:** 20260418
+
 Single-page web app for managing ESP32-S3 cameras, running detections, and browsing results.  
 Served by FastAPI at `/` and `/ui/*` — no build step required.
 
@@ -51,6 +53,16 @@ Per-device paths support both name and MAC: `POST /detect/desk-cam-01` or `POST 
 Stored per-device in `devices` table (`rotate`, `hmirror`, `vflip`).  
 Stream proxy applies orientation server-side — all saved images and inference results use the corrected orientation.  
 Live page controls write directly to the stream config YAML.
+
+## Version Mismatch Detection
+
+On startup the UI fetches `GET /version` and compares the response against the embedded `UI_VERSION` constant. If they differ, the sidebar label turns amber and shows:
+
+```
+UI 20260418 / 服务 20260XXX
+```
+
+with a tooltip: *"版本不一致：请在服务器 git pull 并重启 Docker"*. This catches cases where a git push was made but Docker was not restarted on the server.
 
 ## Configuration
 

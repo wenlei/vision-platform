@@ -1,5 +1,7 @@
 # Vision Inference — API Reference
 
+> **Version:** 20260418
+
 Base URL: `http://192.168.50.71:8000`
 
 ---
@@ -179,11 +181,12 @@ Confidence levels: `high` (≥ 0.75) · `low` (0.40–0.75, triggers auto-learn)
 
 ---
 
-## Health
+## Health & Version
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Service status, CUDA info, storage mode, face thresholds, DB host |
+| `GET` | `/version` | Current service version `{"version": "YYYYMMDD"}` — UI compares this at startup to detect stale Docker deployments |
 
 ```json
 {

@@ -1,5 +1,7 @@
 # api/ — FastAPI Service Modules
 
+> **Version:** 20260418
+
 ## Directory Structure
 
 ```
@@ -133,6 +135,7 @@ DELETE /groups/{name}           Delete group
 
 ```
 GET    /health                  Service status, CUDA device, DB connection
+GET    /version                 Current service version {"version": "YYYYMMDD"}
 GET    /                        Web UI (index.html, no-cache)
 ```
 

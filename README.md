@@ -1,5 +1,7 @@
 # vision-platform
 
+> **Version:** 20260418
+
 ESP32-S3 desk camera system with GPU-accelerated vision inference — YOLO11L detection, CLIP custom item matching, InsightFace face recognition.
 
 ## Architecture
@@ -119,6 +121,7 @@ Base URL: `http://192.168.50.71:8000`
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Service status, CUDA device, DB connection |
+| `GET` | `/version` | Current service version string `{"version": "YYYYMMDD"}` |
 | `GET` | `/` | Web UI (index.html, no-cache) |
 
 ## Device Tags
