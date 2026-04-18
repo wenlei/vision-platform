@@ -3,6 +3,7 @@
 #include <WebServer.h>
 #include "esp_camera.h"
 #include "esp_task_wdt.h"
+#include <Update.h>
 #include "secrets.h"          // WIFI_SSID, WIFI_PASSWORD (git-ignored)
 
 // ── WiFi 配置 ──────────────────────────────────────────────
@@ -84,6 +85,32 @@ const char* getResetReason() {
     }
 }
 
+// ── 分辨率名称映射 ────────────────────────────────────────
+struct FramesizeEntry { framesize_t fs; const char* name; uint16_t w; uint16_t h; };
+static const FramesizeEntry FRAMESIZES[] = {
+    { FRAMESIZE_QQVGA,  "QQVGA",  160,  120 },
+    { FRAMESIZE_QVGA,   "QVGA",   320,  240 },
+    { FRAMESIZE_VGA,    "VGA",    640,  480 },
+    { FRAMESIZE_SVGA,   "SVGA",   800,  600 },
+    { FRAMESIZE_XGA,    "XGA",   1024,  768 },
+    { FRAMESIZE_HD,     "HD",    1280,  720 },
+    { FRAMESIZE_SXGA,   "SXGA",  1280,  960 },
+    { FRAMESIZE_UXGA,   "UXGA",  1600, 1200 },
+};
+static const int FRAMESIZES_COUNT = sizeof(FRAMESIZES) / sizeof(FRAMESIZES[0]);
+
+const char* framesizeName(framesize_t fs) {
+    for (int i = 0; i < FRAMESIZES_COUNT; i++)
+        if (FRAMESIZES[i].fs == fs) return FRAMESIZES[i].name;
+    return "unknown";
+}
+
+framesize_t framesizeFromName(const String& name) {
+    for (int i = 0; i < FRAMESIZES_COUNT; i++)
+        if (name.equalsIgnoreCase(FRAMESIZES[i].name)) return FRAMESIZES[i].fs;
+    return FRAMESIZE_VGA;  // 默认
+}
+
 // ── 摄像头初始化 ──────────────────────────────────────────
 // 配置摄像头参数并调用 esp_camera_init()。
 // 分辨率 VGA 640x480，JPEG 质量 10（较高压缩，适合网络传输）。
@@ -135,20 +162,25 @@ bool initCamera() {
 void handleStatus() {
     sensor_t* s = esp_camera_sensor_get();
     int vf = 0, hm = 0;
-    if (s) { vf = s->status.vflip; hm = s->status.hmirror; }
+    const char* res = "unknown";
+    if (s) {
+        vf  = s->status.vflip;
+        hm  = s->status.hmirror;
+        res = framesizeName((framesize_t)s->status.framesize);
+    }
 
     String json = "{\"status\":\"ok\","
         "\"device\":\"XIAO ESP32-S3\","
-        "\"device_name\":\"desk-cam-01\","  // 仅作标识，正式映射在后端
+        "\"device_name\":\"desk-cam-01\","
         "\"location\":\"study-desk\","
-        "\"resolution\":\"640x480\","
-        "\"vflip\":"    + String(vf) + ","
-        "\"hmirror\":"  + String(hm) + ","
-        "\"ip\":\""     + WiFi.localIP().toString() + "\","
-        "\"mac\":\""    + WiFi.macAddress() + "\","
-        "\"rssi\":"     + String(WiFi.RSSI()) + ","
-        "\"uptime_sec\":" + String(millis() / 1000) + ","
-        "\"free_heap\":" + String(ESP.getFreeHeap()) + ","
+        "\"resolution\":\""  + String(res) + "\","
+        "\"vflip\":"         + String(vf) + ","
+        "\"hmirror\":"       + String(hm) + ","
+        "\"ip\":\""          + WiFi.localIP().toString() + "\","
+        "\"mac\":\""         + WiFi.macAddress() + "\","
+        "\"rssi\":"          + String(WiFi.RSSI()) + ","
+        "\"uptime_sec\":"    + String(millis() / 1000) + ","
+        "\"free_heap\":"     + String(ESP.getFreeHeap()) + ","
         "\"wifi_reconnects\":" + String(wifiReconnects) + ","
         "\"boot_reason\":\"" + String(getResetReason()) + "\"}";
     server.sendHeader("Access-Control-Allow-Origin", "*");
@@ -183,10 +215,45 @@ void handleLogs() {
     }
 }
 
-// ── POST /config?vflip=0|1&hmirror=0|1 ───────────────────
-// 动态调整摄像头方向，直接写入传感器寄存器，立即对所有后续帧生效。
-// vflip=1：垂直翻转；hmirror=1：水平镜像。
-// 可组合使用，不影响 MJPEG 流的连续性。
+// ── POST /update ──────────────────────────────────────────
+// OTA 固件升级：接收 multipart/form-data 中的 .bin 文件，
+// 写入 OTA 分区，成功后延迟 1.5s 自动重启。
+// 用法：curl -F "firmware=@firmware.bin" http://<IP>/update
+void handleOTA() {
+    if (server.method() != HTTP_POST) {
+        server.send(405, "text/plain", "POST only");
+        return;
+    }
+    server.sendHeader("Connection", "close");
+    bool ok = Update.hasError() == false;
+    server.send(ok ? 200 : 500, "text/plain", ok ? "OK: rebooting..." : "FAIL");
+    delay(1500);
+    ESP.restart();
+}
+
+void handleOTAUpload() {
+    HTTPUpload& upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+        addLog("OTA start: %s (%u bytes)", upload.filename.c_str(), upload.totalSize);
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+            addLog("OTA begin failed");
+        }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+            addLog("OTA write error");
+        }
+    } else if (upload.status == UPLOAD_FILE_END) {
+        if (Update.end(true)) {
+            addLog("OTA success: %u bytes, rebooting", upload.totalSize);
+        } else {
+            addLog("OTA end failed");
+        }
+    }
+}
+
+// ── POST /config?vflip=0|1&hmirror=0|1&framesize=VGA ─────
+// 动态调整摄像头方向和分辨率，直接写入传感器寄存器，立即对所有后续帧生效。
+// framesize 支持：QQVGA/QVGA/VGA/SVGA/XGA/HD/SXGA/UXGA
 void handleConfig() {
     sensor_t* s = esp_camera_sensor_get();
     if (!s) {
@@ -203,9 +270,16 @@ void handleConfig() {
         s->set_hmirror(s, h);
         addLog("Config hmirror=%d", h);
     }
+    if (server.hasArg("framesize")) {
+        framesize_t fs = framesizeFromName(server.arg("framesize"));
+        s->set_framesize(s, fs);
+        addLog("Config framesize=%s", framesizeName(fs));
+    }
+    const char* res = framesizeName((framesize_t)s->status.framesize);
     String json = "{\"status\":\"ok\","
-        "\"vflip\":"   + String(s->status.vflip) + ","
-        "\"hmirror\":" + String(s->status.hmirror) + "}";
+        "\"vflip\":"      + String(s->status.vflip) + ","
+        "\"hmirror\":"    + String(s->status.hmirror) + ","
+        "\"resolution\":\"" + String(res) + "\"}";
     server.sendHeader("Access-Control-Allow-Origin", "*");
     server.send(200, "application/json", json);
 }
@@ -331,10 +405,7 @@ void setup() {
     addLog("Boot reason: %s", getResetReason());
     addLog("Connecting WiFi SSID=%s", ssid);
 
-    // 静态 IP
-    WiFi.config(IPAddress(192,168,50,88), IPAddress(192,168,50,1), IPAddress(255,255,255,0));
-
-    // 初始连接，超时 15s 后继续（checkWifi() 在 loop 中持续重试）
+    // DHCP — IP 由路由器分配，建议在路由器按 MAC 绑定固定 IP
     WiFi.begin(ssid, password);
     unsigned long wifiStart = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 15000) {
@@ -360,6 +431,7 @@ void setup() {
     server.on("/capture", handleCapture);
     server.on("/config",  handleConfig);
     server.on("/logs",    handleLogs);
+    server.on("/update", HTTP_POST, handleOTA, handleOTAUpload);
     server.begin();
 
     // 启动 MJPEG 流服务（独立端口 :81）

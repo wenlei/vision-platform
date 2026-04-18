@@ -188,6 +188,51 @@ async def scan_device(ip: str):
     }
 
 
+@router.get("/scan-subnet")
+async def scan_subnet(subnet: str = "192.168.50", start: int = 1, end: int = 254, concurrency: int = 50):
+    """
+    并发扫描子网，找出所有响应 /status 的 ESP32 设备。
+    默认扫描 192.168.50.1-254，并发 50，约 10 秒完成。
+    """
+    import asyncio
+
+    registered_macs: set[str] = set()
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute("SELECT mac FROM devices")
+            registered_macs = {r[0].upper() for r in cur.fetchall()}
+    except Exception:
+        pass
+
+    async def probe(ip: str) -> dict | None:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(2.0)) as client:
+                r = await client.get(f"http://{ip}/status")
+                if r.status_code == 200:
+                    data = r.json()
+                    mac = data.get("mac", "").upper()
+                    return {
+                        "ip":         ip,
+                        "mac":        mac,
+                        "name":       data.get("device_name", ""),
+                        "stream_url": f"http://{ip}:81/",
+                        "registered": mac in registered_macs,
+                    }
+        except Exception:
+            return None
+
+    ips = [f"{subnet}.{i}" for i in range(start, end + 1)]
+    sem = asyncio.Semaphore(concurrency)
+
+    async def bounded(ip):
+        async with sem:
+            return await probe(ip)
+
+    results = await asyncio.gather(*[bounded(ip) for ip in ips])
+    found = [r for r in results if r is not None]
+    return {"found": found, "count": len(found), "subnet": subnet}
+
+
 @router.get("/discovered")
 def discovered_devices():
     try:
