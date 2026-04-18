@@ -10,6 +10,8 @@ from api.db import get_conn
 logging.basicConfig(level=log_level(), format=log_format())
 log = logging.getLogger(__name__)
 
+APP_VERSION = "20260418"
+
 app = FastAPI(title="Vision Inference Service")
 
 from api import models  # noqa: E402, F401
@@ -79,6 +81,11 @@ try:
     log.info("DB migration: devices columns + detection_groups tables OK")
 except Exception as e:
     log.warning("DB migration failed: %s", e)
+
+@app.get("/version")
+def get_version():
+    return {"version": APP_VERSION}
+
 
 _BASE  = Path(__file__).parent.parent
 UI_DIR = _BASE / "UI"

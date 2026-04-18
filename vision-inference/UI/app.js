@@ -1,6 +1,25 @@
 // ── 全局配置 ─────────────────────────────────────────────────
 let API = localStorage.getItem('vision_api') || location.origin;
 
+const UI_VERSION = "20260418";
+
+// ── 版本检查：对比 UI 版本与服务器版本 ─────────────────────────
+(async function checkVersion() {
+  try {
+    const r = await fetch(API + '/version', { signal: AbortSignal.timeout(3000) });
+    const { version } = await r.json();
+    const label = document.getElementById('ver-label');
+    if (version !== UI_VERSION) {
+      label.textContent = `UI ${UI_VERSION} / 服务 ${version}`;
+      label.style.color = 'var(--amber)';
+      label.title = '版本不一致：请在服务器 git pull 并重启 Docker';
+    } else {
+      label.textContent = `Platform ${UI_VERSION}`;
+      label.style.color = '';
+    }
+  } catch { /* 离线时静默 */ }
+})();
+
 // ── 工具函数 ─────────────────────────────────────────────────
 function esc(str) {
   const el = document.createElement('span');
