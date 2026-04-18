@@ -172,8 +172,6 @@ void handleStatus() {
     String json = "{\"status\":\"ok\","
         "\"platform\":\"desk-vision\","
         "\"device\":\"XIAO ESP32-S3\","
-        "\"device_name\":\"desk-cam-01\","
-        "\"location\":\"study-desk\","
         "\"resolution\":\""  + String(res) + "\","
         "\"vflip\":"         + String(vf) + ","
         "\"hmirror\":"       + String(hm) + ","
@@ -299,7 +297,6 @@ void handleCapture() {
     server.sendHeader("Access-Control-Allow-Origin", "*");
     server.sendHeader("X-Device-MAC",          WiFi.macAddress());
     server.sendHeader("X-Device-IP",           WiFi.localIP().toString());
-    server.sendHeader("X-Device-Name",         "desk-cam-01");
     server.sendHeader("Content-Disposition",   "inline; filename=capture.jpg");
     server.send_P(200, "image/jpeg", (const char*)fb->buf, fb->len);
     esp_camera_fb_return(fb);
