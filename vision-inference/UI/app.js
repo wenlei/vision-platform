@@ -1679,6 +1679,70 @@ function deleteCurrentDevice() {
   if (_editingMac) deleteDevice(_editingMac);
 }
 
+async function scanSubnet() {
+  const subnet = document.getElementById('subnet-prefix').value.trim() || '192.168.50';
+  const start  = parseInt(document.getElementById('subnet-start').value) || 1;
+  const end    = parseInt(document.getElementById('subnet-end').value) || 254;
+  const statusEl  = document.getElementById('subnet-scan-status');
+  const resultsEl = document.getElementById('subnet-scan-results');
+  const btn = document.getElementById('subnet-scan-btn');
+
+  btn.disabled = true;
+  btn.textContent = '扫描中...';
+  statusEl.style.color = 'var(--text3)';
+  statusEl.textContent = `正在扫描 ${subnet}.${start}–${end}，约需 10 秒...`;
+  resultsEl.innerHTML = '';
+
+  try {
+    const r = await fetch(
+      `${API}/devices/scan-subnet?subnet=${encodeURIComponent(subnet)}&start=${start}&end=${end}`,
+      { signal: AbortSignal.timeout(30000) }
+    );
+    const data = await r.json();
+    const found = data.found || [];
+    statusEl.style.color = found.length ? 'var(--green)' : 'var(--text3)';
+    statusEl.textContent = found.length ? `发现 ${found.length} 台设备` : '未发现 ESP32 设备';
+
+    if (found.length) {
+      const table = document.createElement('table');
+      table.className = 'list-table';
+      table.innerHTML = '<thead><tr><th>IP</th><th>MAC</th><th>设备名</th><th>状态</th><th>操作</th></tr></thead><tbody></tbody>';
+      const tbody = table.querySelector('tbody');
+      found.forEach(d => {
+        const tr = document.createElement('tr');
+        const badge = d.registered
+          ? '<span class="badge green">已注册</span>'
+          : '<span class="badge amber">未注册</span>';
+        const fillBtn = d.registered ? '' :
+          `<button class="btn" style="padding:2px 8px;font-size:10px" onclick='fillSubnetDevice(${JSON.stringify(d)})'>注册</button>`;
+        tr.innerHTML =
+          `<td style="font-family:monospace;font-size:11px">${esc(d.ip)}</td>` +
+          `<td style="font-family:monospace;font-size:11px">${esc(d.mac)}</td>` +
+          `<td style="font-size:11px">${esc(d.name || '-')}</td>` +
+          `<td>${badge}</td><td>${fillBtn}</td>`;
+        tbody.appendChild(tr);
+      });
+      resultsEl.appendChild(table);
+    }
+  } catch(e) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '扫描失败：' + e.message;
+  }
+  btn.disabled = false;
+  btn.textContent = '🔍 扫描';
+}
+
+function fillSubnetDevice(d) {
+  clearDevForm();
+  document.getElementById('dev-mac').value  = d.mac || '';
+  document.getElementById('dev-ip').value   = d.ip  || '';
+  document.getElementById('dev-name').value = d.name || '';
+  document.getElementById('dev-url').value  = d.stream_url || '';
+  document.getElementById('scan-result').style.color = 'var(--text3)';
+  document.getElementById('scan-result').textContent = `子网扫描填入，MAC: ${d.mac} — 请完善设备名后保存`;
+  document.getElementById('dev-form-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function pingDevices() { initDevices(); }
 function setDevStatus() {}
 
