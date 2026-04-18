@@ -1,7 +1,7 @@
 // ── 全局配置 ─────────────────────────────────────────────────
 let API = localStorage.getItem('vision_api') || location.origin;
 
-const UI_VERSION = "20260418";
+const UI_VERSION = "20260419";
 
 // ── 版本检查：对比 UI 版本与服务器版本 ─────────────────────────
 (async function checkVersion() {

@@ -10,7 +10,7 @@ from api.db import get_conn
 logging.basicConfig(level=log_level(), format=log_format())
 log = logging.getLogger(__name__)
 
-APP_VERSION = "20260418"
+APP_VERSION = "20260419"
 
 app = FastAPI(title="Vision Inference Service")
 
