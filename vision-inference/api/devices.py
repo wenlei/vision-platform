@@ -210,6 +210,8 @@ async def scan_subnet(subnet: str = "192.168.50", start: int = 1, end: int = 254
                 r = await client.get(f"http://{ip}/status")
                 if r.status_code == 200:
                     data = r.json()
+                    if data.get("platform") != "desk-vision":
+                        return None
                     mac = data.get("mac", "").upper()
                     return {
                         "ip":         ip,

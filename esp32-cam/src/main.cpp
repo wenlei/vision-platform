@@ -170,6 +170,7 @@ void handleStatus() {
     }
 
     String json = "{\"status\":\"ok\","
+        "\"platform\":\"desk-vision\","
         "\"device\":\"XIAO ESP32-S3\","
         "\"device_name\":\"desk-cam-01\","
         "\"location\":\"study-desk\","
