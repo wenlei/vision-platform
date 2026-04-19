@@ -297,21 +297,37 @@
         </div>
       </div>
 
+      <!-- 子网扫描 + 注册表单 并排 -->
       <div class="register-layout">
+
+        <!-- 子网扫描 -->
+        <div class="card">
+          <div class="card-title">子网扫描</div>
+          <div class="col" style="gap:8px;margin-bottom:8px">
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">子网前缀</div>
+              <input type="text" id="subnet-prefix" value="192.168.50" style="width:100%;height:32px">
+            </div>
+            <div class="row" style="gap:8px">
+              <div style="flex:1">
+                <div style="font-size:10px;color:var(--text3);margin-bottom:3px">起始</div>
+                <input type="number" id="subnet-start" value="1" min="1" max="254" style="width:100%;height:32px">
+              </div>
+              <div style="flex:1">
+                <div style="font-size:10px;color:var(--text3);margin-bottom:3px">结束</div>
+                <input type="number" id="subnet-end" value="254" min="1" max="254" style="width:100%;height:32px">
+              </div>
+            </div>
+            <button class="btn primary" id="subnet-scan-btn" onclick="scanSubnet()" style="width:100%">🔍 扫描子网</button>
+          </div>
+          <div id="subnet-scan-status" style="font-size:11px;color:var(--text3);margin-bottom:6px"></div>
+          <div id="subnet-scan-results"></div>
+        </div>
 
         <!-- 注册/编辑表单 -->
         <div class="card">
           <div class="card-title" id="dev-form-title">注册设备</div>
-
-          <!-- 从 IP 扫描 -->
-          <div style="margin-bottom:12px">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:6px">从 IP 地址扫描</div>
-            <div class="row" style="gap:6px">
-              <input type="text" id="scan-ip" placeholder="如 192.168.50.88" style="flex:1;height:32px">
-              <button class="btn" onclick="scanByIP()" style="height:32px;white-space:nowrap">扫描</button>
-            </div>
-            <div id="scan-result" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
-          </div>
+          <div id="scan-result" style="display:none"></div>
 
           <div class="col" style="gap:10px">
             <div>
@@ -375,43 +391,21 @@
           </div>
         </div>
 
-        <!-- 已注册设备列表 -->
-        <div class="card" style="overflow:auto">
-          <div class="card-title">已注册设备 <span id="devices-count" style="color:var(--text3)"></span></div>
-          <table class="list-table" id="devices-table">
-            <thead><tr>
-              <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>标签</th><th>OTA</th>
-            </tr></thead>
-            <tbody id="devices-tbody">
-              <tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>
-            </tbody>
-          </table>
-          <!-- hidden file input for OTA, reused for all devices -->
-          <input type="file" id="ota-file-input" accept=".bin" style="display:none" onchange="handleOtaFile(event)">
-        </div>
-
       </div>
 
-      <!-- 子网扫描 -->
-      <div class="card">
-        <div class="card-title">子网扫描</div>
-        <div class="row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap">
-          <div style="flex:1;min-width:120px">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">子网前缀</div>
-            <input type="text" id="subnet-prefix" value="192.168.50" style="width:100%;height:32px">
-          </div>
-          <div style="width:64px">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">起始</div>
-            <input type="number" id="subnet-start" value="1" min="1" max="254" style="width:100%;height:32px">
-          </div>
-          <div style="width:64px">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">结束</div>
-            <input type="number" id="subnet-end" value="254" min="1" max="254" style="width:100%;height:32px">
-          </div>
-          <button class="btn primary" id="subnet-scan-btn" onclick="scanSubnet()" style="height:32px;align-self:flex-end;white-space:nowrap">🔍 扫描</button>
-        </div>
-        <div id="subnet-scan-status" style="font-size:11px;color:var(--text3);margin-bottom:6px"></div>
-        <div id="subnet-scan-results"></div>
+      <!-- 已注册设备列表（全宽） -->
+      <div class="card" style="overflow:auto">
+        <div class="card-title">已注册设备 <span id="devices-count" style="color:var(--text3)"></span></div>
+        <table class="list-table" id="devices-table">
+          <thead><tr>
+            <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>标签</th><th>OTA</th>
+          </tr></thead>
+          <tbody id="devices-tbody">
+            <tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>
+          </tbody>
+        </table>
+        <!-- hidden file input for OTA, reused for all devices -->
+        <input type="file" id="ota-file-input" accept=".bin" style="display:none" onchange="handleOtaFile(event)">
       </div>
 
     </div>

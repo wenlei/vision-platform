@@ -1592,39 +1592,6 @@ function autoFillStreamUrl(ip) {
   }
 }
 
-async function scanByIP() {
-  const ip = document.getElementById('scan-ip').value.trim();
-  const resultEl = document.getElementById('scan-result');
-  if (!ip) { resultEl.textContent = '请输入 IP 地址'; return; }
-  resultEl.style.color = 'var(--text3)';
-  resultEl.textContent = '扫描中...';
-  try {
-    const r = await fetch(API + '/devices/scan?ip=' + encodeURIComponent(ip));
-    if (!r.ok) {
-      const e = await r.json();
-      resultEl.style.color = 'var(--red)';
-      resultEl.textContent = e.detail || '扫描失败';
-      return;
-    }
-    const d = await r.json();
-    // Pre-fill the form
-    clearDevForm();
-    document.getElementById('dev-mac').value  = d.mac || '';
-    document.getElementById('dev-ip').value   = d.ip  || ip;
-    document.getElementById('dev-name').value = d.name || '';
-    document.getElementById('dev-loc').value  = d.location || '';
-    document.getElementById('dev-url').value  = d.stream_url || '';
-    resultEl.style.color = d.registered ? 'var(--green)' : 'var(--text3)';
-    resultEl.textContent = d.registered
-      ? `已注册设备，MAC: ${d.mac}`
-      : `发现 ${d.name || '未命名设备'}，MAC: ${d.mac} — 请填写设备名后保存`;
-    if (d.registered) loadDeviceList();
-  } catch {
-    resultEl.style.color = 'var(--red)';
-    resultEl.textContent = '无法连接，请确认 IP 地址和网络';
-  }
-}
-
 async function registerDevice() {
   const mac  = document.getElementById('dev-mac').value.trim();
   const name = document.getElementById('dev-name').value.trim();
@@ -1738,8 +1705,7 @@ function fillSubnetDevice(d) {
   document.getElementById('dev-ip').value   = d.ip  || '';
   document.getElementById('dev-name').value = d.name || '';
   document.getElementById('dev-url').value  = d.stream_url || '';
-  document.getElementById('scan-result').style.color = 'var(--text3)';
-  document.getElementById('scan-result').textContent = `子网扫描填入，MAC: ${d.mac} — 请完善设备名后保存`;
+  // Scroll to form
   document.getElementById('dev-form-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
