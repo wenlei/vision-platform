@@ -1,6 +1,175 @@
 # Vision Inference — API Reference
 
-> **Version:** 20260418
+> **Version:** 20260419
+
+Base URL: `http://192.168.50.71:8000`
+
+---
+
+## Detection
+
+All detection endpoints run the full pipeline: **YOLO11L + CLIP custom items + InsightFace face recognition**. Results are logged to `vision_log`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/detect` | Upload image → full pipeline, returns detections + annotated image path. Form: `file`, `camera_ip?`, `device_mac?` |
+| `POST` | `/detect/{name-or-mac}` | Server captures frame from device by name or MAC, runs full detection. No upload needed |
+| `POST` | `/detect/all` | Capture + detect on **all** registered devices in parallel |
+| `POST` | `/detect/group/{tag}` | Capture + detect on all devices with matching tag |
+
+**Detection result shape**
+
+```json
+{
+  "detections": [{"label": "person", "confidence": 0.91, "bbox": [x1,y1,x2,y2]}],
+  "custom_matches": [["my-keys", 0.83]],
+  "face_results": [{"name": "Wenlei", "similarity": 0.88, "confidence": "high"}],
+  "count": 1,
+  "description": "Detected: person",
+  "image_path": "/app/images/...",
+  "annotated_path": "/app/images/..._ann_....jpg",
+  "saved": true
+}
+```
+
+`/detect/all` and `/detect/group/{tag}` return:
+
+```json
+{
+  "results": [{ "device_mac": "...", "device_name": "...", "location": "...", ...detection fields... }],
+  "count": 2
+}
+```
+
+---
+
+## Stream
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/stream` | MJPEG stream (default device, orientation-corrected) |
+| `GET` | `/stream/{identifier}` | MJPEG stream for device by name or MAC |
+| `GET` | `/stream/capture` | Single raw JPEG frame |
+| `GET` | `/stream/snapshot` | Single JPEG with orientation applied (for download) |
+| `GET` | `/stream/health` | Broadcaster liveness: `{"online": true, "frame_id": 1234}` |
+| `GET` | `/stream/config` | Current source URL + orientation: `{source, rotate, hmirror, vflip}` |
+| `POST` | `/stream/config` | Update source and/or orientation. Body: `{"source": "http://ip:81/", "rotate": 90}` |
+
+---
+
+## Devices
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/devices` | List all registered devices |
+| `POST` | `/devices` | Register device. Body: `{mac, name, location?, ip?, stream_url?, tag?}` |
+| `PUT` | `/devices/{mac}` | Update device fields (partial). Supports `rotate`, `hmirror`, `vflip`, `is_default`, `tag` |
+| `DELETE` | `/devices/{mac}` | Delete device |
+| `PUT` | `/devices/{mac}/set-default` | Mark device as default stream source |
+| `GET` | `/devices/ping?ip=` | Heartbeat to ESP32 `/status`. Returns `{online, rssi, uptime_sec, free_heap}` |
+| `GET` | `/devices/scan?ip=` | Scan ESP32 at IP, return `{mac, ip, name, stream_url, registered}` |
+| `GET` | `/devices/scan-subnet?subnet=192.168.50&start=1&end=254` | Scan subnet for desk-vision devices (filtered by `platform` marker). Returns found list |
+| `GET` | `/devices/discovered` | Devices seen in `vision_log` in last 7 days |
+| `POST` | `/devices/camconfig/{mac}?framesize=VGA` | Push hardware config to ESP32 |
+| `GET` | `/devices/camstatus/{mac}` | Fetch live ESP32 `/status` by MAC |
+
+**Device object**
+
+```json
+{
+  "mac": "AA:BB:CC:DD:EE:FF",
+  "name": "desk-cam-01",
+  "location": "study-desk",
+  "ip": "192.168.50.87",
+  "stream_url": "http://192.168.50.87:81/",
+  "tag": "desk",
+  "rotate": 0, "hmirror": 1, "vflip": 0,
+  "is_default": true,
+  "registered_at": "2026-04-01T12:00:00"
+}
+```
+
+---
+
+## Faces
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/face/register` | Register face. Form: `file`, `name`. Rolling-average if name exists |
+| `POST` | `/face/identify` | Identify face in image. Auto-learns on low-confidence hits. Form: `file` |
+| `GET` | `/faces` | List all registered faces |
+
+**Identify response**
+
+```json
+{
+  "results": [{"name": "Wenlei", "similarity": 0.88, "confidence": "high", "matched": true, "learned": false}]
+}
+```
+
+Confidence: `high` ≥ 0.75 · `low` 0.40–0.75 (triggers auto-learn) · unknown < 0.40
+
+---
+
+## Custom Items
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/register` | Register custom item with CLIP embedding. Form: `file`, `label`, `description?` |
+| `GET` | `/items` | List all registered custom items |
+| `DELETE` | `/items/{label}` | Delete item and all its embeddings |
+
+---
+
+## Search / History
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/search?label=keys&limit=20` | Search `vision_log`. `label` optional (omit for latest N). Default limit 50 |
+
+---
+
+## Tag ↔ Endpoint Bindings
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/bindings` | All tag bindings + available endpoint definitions |
+| `PUT` | `/bindings/{tag}` | Set enabled endpoints for tag. Body: `{"enabled": ["detect", "describe", "capture_snapshot"]}` |
+
+---
+
+## Health & Version
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Service status, CUDA info, storage mode, face thresholds, DB host |
+| `GET` | `/version` | `{"version": "YYYYMMDD"}` — UI compares at startup to detect stale deployments |
+
+---
+
+## Quick Examples
+
+```bash
+# Trigger detection on a specific camera
+curl -X POST http://192.168.50.71:8000/detect/desk-cam-01
+
+# Detect on all cameras
+curl -X POST http://192.168.50.71:8000/detect/all
+
+# Detect by tag
+curl -X POST http://192.168.50.71:8000/detect/group/desk
+
+# Scan subnet for desk-vision devices
+curl "http://192.168.50.71:8000/devices/scan-subnet?subnet=192.168.50"
+
+# Search history
+curl "http://192.168.50.71:8000/search?label=person&limit=20"
+
+# Switch active stream
+curl -X POST http://192.168.50.71:8000/stream/config \
+  -H "Content-Type: application/json" \
+  -d '{"source": "http://192.168.50.88:81/"}'
+```
 
 Base URL: `http://192.168.50.71:8000`
 
