@@ -87,6 +87,14 @@ def _load_config():
 cfg = _load_config()
 
 
+def reload_config():
+    """重新读取 app-runtime.yaml 并原地更新 cfg（所有持有引用的模块即时生效）。"""
+    new = _load_config()
+    cfg.clear()
+    cfg.update(new)
+    print("[config] Reloaded")
+
+
 # ── 便捷访问函数 ─────────────────────────────────────────────
 # 以下函数封装常用配置段，避免各业务模块重复解析字典结构。
 

@@ -56,7 +56,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 function onPageLoad(name) {
   if (name === 'live')    loadCamBar();
-  if (name === 'history') loadHistory();
+  if (name === 'history') { loadHistory(); loadRuntimeConfig(); }
   if (name === 'items')   loadItems();
   if (name === 'faces')   loadFaces();
   if (name === 'devices') initDevices();
@@ -748,6 +748,52 @@ async function searchHistory() {
 function clearSearch() {
   document.getElementById('search-label').value = '';
   loadHistory();
+}
+
+// ── Runtime config (存储/清理配置) ──────────────────────────
+async function loadRuntimeConfig() {
+  try {
+    const r = await fetch('/config/runtime');
+    if (!r.ok) return;
+    const d = await r.json();
+    document.getElementById('cfg-storage-mode').value   = d.storage_mode       ?? 'retention';
+    document.getElementById('cfg-retention-hours').value = d.retention_hours    ?? 72;
+    document.getElementById('cfg-interval-hours').value  = d.cleanup_interval_hours ?? 6;
+    document.getElementById('cfg-status').textContent = '';
+  } catch { /* ignore */ }
+}
+
+async function saveRuntimeConfig() {
+  const btn = document.querySelector('#storage-settings-card .btn.primary');
+  const status = document.getElementById('cfg-status');
+  btn.disabled = true;
+  status.textContent = '保存中...';
+  status.style.color = 'var(--text3)';
+  try {
+    const body = {
+      storage_mode:            document.getElementById('cfg-storage-mode').value,
+      retention_hours:         parseInt(document.getElementById('cfg-retention-hours').value) || 72,
+      cleanup_interval_hours:  parseInt(document.getElementById('cfg-interval-hours').value)  || 6,
+    };
+    const r = await fetch('/config/runtime', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail ?? r.statusText);
+    status.textContent = '✓ 已保存并生效';
+    status.style.color = 'var(--green)';
+    // 回填服务器返回的实际值
+    document.getElementById('cfg-storage-mode').value    = d.storage_mode       ?? body.storage_mode;
+    document.getElementById('cfg-retention-hours').value  = d.retention_hours    ?? body.retention_hours;
+    document.getElementById('cfg-interval-hours').value   = d.cleanup_interval_hours ?? body.cleanup_interval_hours;
+  } catch (e) {
+    status.textContent = '✗ 保存失败: ' + e.message;
+    status.style.color = 'var(--red)';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function renderHistoryTable(results) {

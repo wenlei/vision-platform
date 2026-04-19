@@ -127,6 +127,30 @@
       <div id="history-container">
         <span style="color:var(--text3)">加载中...</span>
       </div>
+
+      <!-- 存储配置 -->
+      <div class="card" style="margin-top:1.5rem" id="storage-settings-card">
+        <div class="card-title">⚙️ 存储 &amp; 清理配置</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:.75rem;align-items:end">
+          <div>
+            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">存储模式</div>
+            <select id="cfg-storage-mode" style="width:100%;height:32px">
+              <option value="none">不保存图片</option>
+              <option value="retention">定期清理</option>
+              <option value="permanent">永久保留</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">保留时间（小时）</div>
+            <input type="number" id="cfg-retention-hours" min="1" placeholder="72" style="width:100%;height:32px">
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">清理间隔（小时）</div>
+            <input type="number" id="cfg-interval-hours" min="1" placeholder="6" style="width:100%;height:32px">
+          </div>
+          <button class="btn primary" onclick="saveRuntimeConfig()" style="height:32px">保存</button>
+        </div>
+        <div id="cfg-status" style="margin-top:.5rem;font-size:.8rem;color:var(--text3)"></div>
       </div>
     </div>
   </div>

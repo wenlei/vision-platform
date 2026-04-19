@@ -108,22 +108,18 @@ def cleanup_once():
 
 
 def main():
-    """守护进程主循环，根据调度配置定期执行清理。"""
-    conf = cleanup_config()
-    schedule = conf.get("schedule", "interval")
-    interval_hours = conf.get("interval_hours", 6)
-    interval_sec = interval_hours * 3600
-
-    log.info(
-        "Cleanup daemon started (retention=%dh, schedule=%s, interval=%dh)",
-        _retention_hours(), schedule, interval_hours,
-    )
+    """守护进程主循环，根据调度配置定期执行清理。每轮重新读取配置，支持运行时修改生效。"""
+    log.info("Cleanup daemon started")
 
     # 启动时立即执行一次
     cleanup_once()
 
     while True:
-        time.sleep(interval_sec)
+        # 每轮重新读取，使 /config/runtime 修改无需重启即可生效
+        conf = cleanup_config()
+        interval_hours = int(conf.get("interval_hours", 6))
+        log.info("Next cleanup in %dh (retention=%dh)", interval_hours, _retention_hours())
+        time.sleep(interval_hours * 3600)
         cleanup_once()
 
 
