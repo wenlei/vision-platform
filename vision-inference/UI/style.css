@@ -727,10 +727,8 @@ input::placeholder { color: var(--text3); }
 }
 
 .api-doc-row {
-  display: grid;
-  grid-template-columns: 340px 1fr;
-  align-items: start;
-  gap: 0;
+  display: flex;
+  flex-direction: column;
   border-bottom: 1px solid var(--border);
   transition: background 0.1s;
 }
@@ -741,17 +739,16 @@ input::placeholder { color: var(--text3); }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 14px;
-  border-right: 1px solid var(--border);
+  padding: 8px 12px 4px;
   background: var(--bg);
   flex-wrap: wrap;
 }
 
 .api-doc-desc {
-  padding: 11px 14px;
-  font-size: 12px;
+  padding: 0 12px 8px;
+  font-size: 11px;
   color: var(--text2);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 .api-doc-desc code {
   background: var(--bg3);
