@@ -444,7 +444,7 @@
     <div class="page-body">
 
       <!-- 上方两列：Tag绑定（左）+ 端点参考（右） -->
-      <div style="display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start">
+      <div class="api-two-col">
 
         <!-- 左：Tag 端点绑定 -->
         <div class="card" style="margin-bottom:0">
@@ -470,77 +470,62 @@
           </table>
         </div>
 
-        <!-- 右：端点参考 -->
-        <div class="card" style="margin-bottom:0">
+        <!-- 右：端点参考（紧凑列表） -->
+        <div class="card api-ref-card" style="margin-bottom:0">
           <div class="card-title">端点参考</div>
-          <div class="api-doc-grid">
-
-            <div class="api-doc-row">
-              <div class="api-doc-sig">
-                <span class="api-method post">POST</span>
-                <span class="api-path">/detect/group/<em>{tag}</em></span>
-              </div>
-              <div class="api-doc-desc">Tag 下全部设备抓帧，YOLO + CLIP 检测，返回 bbox + 标注图。</div>
+          <div class="api-ref-list">
+            <div class="api-ref-item">
+              <span class="api-method post">POST</span>
+              <span class="api-path">/detect/group/<em>{tag}</em></span>
+              <span class="api-ref-desc">Tag 下全部设备 YOLO+CLIP 检测</span>
             </div>
-
-            <div class="api-doc-row">
-              <div class="api-doc-sig">
-                <span class="api-method post">POST</span>
-                <span class="api-path">/describe/group/<em>{tag}</em></span>
-              </div>
-              <div class="api-doc-desc">轻量检测，不生成标注图，返回文字描述 + 自定义物品匹配。</div>
+            <div class="api-ref-item">
+              <span class="api-method post">POST</span>
+              <span class="api-path">/describe/group/<em>{tag}</em></span>
+              <span class="api-ref-desc">轻量检测，不生成标注图</span>
             </div>
-
-            <div class="api-doc-row">
-              <div class="api-doc-sig">
-                <span class="api-method post">POST</span>
-                <span class="api-path">/capture/group/<em>{tag}</em></span>
-              </div>
-              <div class="api-doc-desc">仅抓帧存图，不做推理，返回各设备图片路径。</div>
+            <div class="api-ref-item">
+              <span class="api-method post">POST</span>
+              <span class="api-path">/capture/group/<em>{tag}</em></span>
+              <span class="api-ref-desc">仅抓帧存图，不推理</span>
             </div>
-
-            <div class="api-doc-row">
-              <div class="api-doc-sig">
-                <span class="api-method post">POST</span>
-                <span class="api-path">/detect/<em>{name-or-mac}</em></span>
-              </div>
-              <div class="api-doc-desc">单设备抓帧 + 完整检测，支持设备名或 MAC。</div>
+            <div class="api-ref-item">
+              <span class="api-method post">POST</span>
+              <span class="api-path">/detect/<em>{name-or-mac}</em></span>
+              <span class="api-ref-desc">单设备抓帧 + 完整检测</span>
             </div>
-
-            <div class="api-doc-row">
-              <div class="api-doc-sig">
-                <span class="api-method post">POST</span>
-                <span class="api-path">/detect</span>
-                <span class="api-badge">upload</span>
-              </div>
-              <div class="api-doc-desc">上传图片检测，form-data: <code>file</code>。</div>
+            <div class="api-ref-item">
+              <span class="api-method post">POST</span>
+              <span class="api-path">/detect/all</span>
+              <span class="api-ref-desc">全部设备并行检测</span>
             </div>
-
-            <div class="api-doc-row">
-              <div class="api-doc-sig">
-                <span class="api-method post">POST</span>
-                <span class="api-path">/detect/all</span>
-              </div>
-              <div class="api-doc-desc">全部注册设备同时抓帧并检测。</div>
+            <div class="api-ref-item">
+              <span class="api-method post">POST</span>
+              <span class="api-path">/detect</span>
+              <span class="api-badge">upload</span>
+              <span class="api-ref-desc">上传图片检测</span>
             </div>
-
-            <div class="api-doc-row">
-              <div class="api-doc-sig">
-                <span class="api-method get">GET</span>
-                <span class="api-path">/search</span>
-              </div>
-              <div class="api-doc-desc">检测历史查询，<code>?label=</code> <code>?limit=</code> <code>?device_mac=</code>。</div>
+            <div class="api-ref-item">
+              <span class="api-method get">GET</span>
+              <span class="api-path">/search</span>
+              <span class="api-ref-desc">历史查询 <code>?label= ?limit=</code></span>
             </div>
-
-            <div class="api-doc-row">
-              <div class="api-doc-sig">
-                <span class="api-method post">POST</span>
-                <span class="api-path">/face/identify</span>
-                <span class="api-badge">upload</span>
-              </div>
-              <div class="api-doc-desc">人脸识别，form-data: <code>file</code>。</div>
+            <div class="api-ref-item">
+              <span class="api-method get">GET</span>
+              <span class="api-path">/stream/<em>{identifier}</em></span>
+              <span class="api-ref-desc">设备 MJPEG 流</span>
             </div>
-
+            <div class="api-ref-item">
+              <span class="api-method post">POST</span>
+              <span class="api-path">/face/identify</span>
+              <span class="api-badge">upload</span>
+              <span class="api-ref-desc">人脸识别</span>
+            </div>
+            <div class="api-ref-item">
+              <span class="api-method get">GET</span>
+              <span class="api-path">/health</span>
+              <span class="api-ref-desc">服务状态 + CUDA 信息</span>
+            </div>
           </div>
         </div>
 

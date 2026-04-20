@@ -715,48 +715,44 @@ input::placeholder { color: var(--text3); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
 /* ══════════════════════════════════════════════════════════
-   API DOC — endpoint reference grid
+   API PAGE
 ══════════════════════════════════════════════════════════ */
-.api-doc-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
+.api-two-col {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
 }
 
-.api-doc-row {
+/* Compact endpoint reference list (right sidebar) */
+.api-ref-list {
   display: flex;
   flex-direction: column;
+}
+.api-ref-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 0;
   border-bottom: 1px solid var(--border);
-  transition: background 0.1s;
-}
-.api-doc-row:last-child { border-bottom: none; }
-.api-doc-row:hover { background: var(--bg3); }
-
-.api-doc-sig {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px 4px;
-  background: var(--bg);
   flex-wrap: wrap;
 }
-
-.api-doc-desc {
-  padding: 0 12px 8px;
+.api-ref-item:last-child { border-bottom: none; }
+.api-ref-desc {
   font-size: 11px;
-  color: var(--text2);
-  line-height: 1.5;
+  color: var(--text3);
+  flex-basis: 100%;
+  padding-left: 2px;
+  margin-top: 1px;
 }
-.api-doc-desc code {
+.api-ref-desc code {
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: 3px;
-  padding: 0 4px;
+  padding: 0 3px;
   font-family: 'SF Mono', 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--accent);
 }
 
