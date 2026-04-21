@@ -58,10 +58,21 @@ async def face_register(request: Request,
             content={"status": "error", "error": "No face detected in image"}
         )
 
-    face = max(faces, key=lambda f: f.det_score)
+    # 选面积最大的脸（适合生活照，目标人物通常最近/最大）
+    face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
     new_emb = face.embedding.tolist()
     det_score = round(float(face.det_score), 3)
-    image_path = save_image_file(img_pil, tag, suffix="_face")
+
+    # 裁剪人脸区域（留 20% padding，保存供 UI 预览）
+    x1, y1, x2, y2 = [int(v) for v in face.bbox]
+    pad_x = max(10, int((x2 - x1) * 0.2))
+    pad_y = max(10, int((y2 - y1) * 0.2))
+    cx1 = max(0, x1 - pad_x)
+    cy1 = max(0, y1 - pad_y)
+    cx2 = min(img_pil.width, x2 + pad_x)
+    cy2 = min(img_pil.height, y2 + pad_y)
+    face_crop = img_pil.crop((cx1, cy1, cx2, cy2))
+    face_image_path = save_image_file(face_crop, tag, suffix="_face_crop")
 
     try:
         with get_conn() as (conn, cur):
@@ -94,7 +105,7 @@ async def face_register(request: Request,
                            det_score    = %s,
                            updated_at   = NOW()
                        WHERE id = %s""",
-                    (str(avg_emb), count + 1, image_path, det_score, face_id)
+                    (str(avg_emb), count + 1, face_image_path, det_score, face_id)
                 )
                 new_count = count + 1
                 msg = f"Updated '{name}': sample {new_count}"
@@ -106,7 +117,7 @@ async def face_register(request: Request,
                        VALUES (%s, %s, %s::vector, %s, %s, %s, 1)
                        RETURNING id""",
                     (name, label or name, str(new_emb),
-                     image_path, det_score, mac)
+                     face_image_path, det_score, mac)
                 )
                 face_id = cur.fetchone()[0]
                 new_count = 1
@@ -120,7 +131,8 @@ async def face_register(request: Request,
             "name": name,
             "det_score": det_score,
             "sample_count": new_count,
-            "image_path": image_path,
+            "face_crop_url": face_image_path,
+            "bbox": [int(v) for v in face.bbox.tolist()],
         }
     except Exception as e:
         log.error("face_register error: %s", e)

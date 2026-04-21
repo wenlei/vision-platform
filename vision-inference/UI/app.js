@@ -1108,6 +1108,7 @@ async function registerFace() {
 
   let succeeded = 0;
   const errors = [];
+  const crops = [];  // face crop URLs to display
   for (let i = 0; i < total; i++) {
     progressText.textContent = `${i} / ${total}`;
     progressBar.style.width = `${Math.round(i / total * 100)}%`;
@@ -1117,8 +1118,12 @@ async function registerFace() {
     try {
       const r = await fetch(API + '/face/register', { method: 'POST', body: fd });
       const d = await r.json();
-      if (d.status === 'ok') succeeded++;
-      else errors.push(`第 ${i+1} 张: ${d.error || JSON.stringify(d)}`);
+      if (d.status === 'ok') {
+        succeeded++;
+        if (d.face_crop_url) crops.push({ url: d.face_crop_url, det: d.det_score });
+      } else {
+        errors.push(`第 ${i+1} 张: ${d.error || JSON.stringify(d)}`);
+      }
     } catch (e) {
       errors.push(`第 ${i+1} 张请求失败: ${e.message}`);
     }
@@ -1133,6 +1138,28 @@ async function registerFace() {
   errors.forEach(e => lines.push(`✕ ${e}`));
   result.innerHTML = lines.join('<br>');
   result.style.color = errors.length === 0 ? 'var(--green)' : (succeeded > 0 ? 'var(--amber)' : 'var(--red)');
+
+  // Show face crops so user can verify the right face was selected
+  if (crops.length) {
+    const cropRow = document.createElement('div');
+    cropRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:10px';
+    crops.forEach(({ url, det }) => {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:relative;display:inline-block';
+      const img = document.createElement('img');
+      const filename = url.split('/').pop();
+      img.src = `${API}/images/${filename}`;
+      img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:6px;border:2px solid var(--green)';
+      img.title = `det_score: ${det}`;
+      const score = document.createElement('div');
+      score.style.cssText = 'position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:9px;color:#fff;text-shadow:0 0 3px rgba(0,0,0,0.9);line-height:1.2';
+      score.textContent = det;
+      wrap.appendChild(img);
+      wrap.appendChild(score);
+      cropRow.appendChild(wrap);
+    });
+    result.appendChild(cropRow);
+  }
 
   if (errors.length === 0) {
     toast(`✓ ${name} 注册完成 (${total} 张)`, 'ok');
