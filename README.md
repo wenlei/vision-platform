@@ -264,12 +264,13 @@ Base URL: `http://192.168.50.71:8000`
 | `PUT` | `/groups/{name}` | Update group |
 | `DELETE` | `/groups/{name}` | Delete group |
 
-### Health & UI
+### Health, Config & UI
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Service status, CUDA device, DB connection |
 | `GET` | `/version` | Current service version string `{"version": "YYYYMMDD"}` |
+| `GET/POST` | `/config/runtime` | Read/write storage and cleanup settings to `app-runtime.yaml` |
 | `GET` | `/` | Web UI (index.html, no-cache) |
 
 ## Device Tags

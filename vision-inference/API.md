@@ -357,14 +357,18 @@ Confidence levels: `high` (≥ 0.75) · `low` (0.40–0.75, triggers auto-learn)
 | `GET` | `/health` | Service status, CUDA info, storage mode, face thresholds, DB host |
 | `GET` | `/version` | Current service version `{"version": "YYYYMMDD"}` — UI compares this at startup to detect stale Docker deployments |
 
+## Runtime Config
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/config/runtime` | Returns current storage & cleanup config `{"storage_mode", "retention_hours", "cleanup_interval_hours"}` |
+| `POST` | `/config/runtime` | Updates `app-runtime.yaml` and reloads in-place. Body: `{storage_mode?, retention_hours?, cleanup_interval_hours?}` |
+
 ```json
 {
-  "status": "ok",
-  "device": "NVIDIA GeForce RTX ...",
-  "cuda": true,
-  "image_storage": "retention",
-  "face_threshold": {"high": 0.75, "low": 0.40},
-  "db_host": "192.168.50.118"
+  "storage_mode": "retention",
+  "retention_hours": 72,
+  "cleanup_interval_hours": 6
 }
 ```
 
