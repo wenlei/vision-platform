@@ -1,0 +1,20 @@
+FROM python:3.11-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 libgl1-mesa-glx libgomp1 libpq-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY docker/requirements.cpu.txt .
+RUN pip install --no-cache-dir -r requirements.cpu.txt
+
+RUN python3 -c "import clip; clip.load('ViT-B/32', device='cpu'); print('CLIP downloaded')"
+RUN python3 -c "from ultralytics import YOLO; YOLO('yolo26n.pt'); print('YOLO26N downloaded')"
+
+COPY api/ ./api/
+COPY UI/ ./UI/
+
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+CMD ["python3", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: vision-postgres-cpu
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wenlei
+      POSTGRES_PASSWORD: wenlei
+      POSTGRES_DB: vision_db
+    ports:
+      - 5432:5432
+    volumes:
+      - pgdata_cpu:/var/lib/postgresql/data
+      - ../init_db.sql:/docker-entrypoint-initdb.d/01_init_db.sql
+    healthcheck:
+      test: [CMD, pg_isready, -U, wenlei, -d, vision_db]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: '2'
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cpu
+    image: vision-inference:cpu
+    container_name: vision-inference-cpu
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - 8000:8000
+    environment:
+      DEVICE: cpu
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: wenlei
+      DB_PASS: wenlei
+      DB_NAME: vision_db
+      IMAGE_STORAGE: retention
+      IMAGE_RETENTION_HOURS: 72
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:8000/health]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: '3'
+    volumes:
+      - vision_images_cpu:/app/images
+      - ../app-runtime-cpu.yaml:/app/app-runtime.yaml:ro
+
+volumes:
+  pgdata_cpu:
+    driver: local
+  vision_images_cpu:
+    driver: local

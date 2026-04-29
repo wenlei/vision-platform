@@ -6,7 +6,7 @@ models.py -- AI 模型加载模块
   模型只加载一次（进程级单例），避免重复占用显存/内存。
 
 包含模型：
-  - YOLO11L   : 目标检测（GPU 路线）/ YOLO11N（CPU 路线）
+  - YOLO26L   : 目标检测（GPU 路线）/ YOLO26N（CPU 路线）
   - CLIP      : ViT-B/32 语义 embedding，用于自定义物品检索
   - InsightFace: buffalo_l（GPU）/ buffalo_s（CPU），人脸 embedding
 
@@ -30,7 +30,7 @@ DEVICE: str = "cuda" if torch.cuda.is_available() else "cpu"
 # 根据配置决定模型规格
 # gpu 路线使用大模型（高精度），cpu 路线使用小模型（低功耗）
 _mode         = cfg.get("device", "gpu")
-_YOLO_MODEL   = "yolo11l.pt"  if _mode == "gpu" else "yolo11n.pt"
+_YOLO_MODEL   = "yolo26l.pt"  if _mode == "gpu" else "yolo26n.pt"
 _FACE_MODEL   = "buffalo_l"   if _mode == "gpu" else "buffalo_s"
 _FACE_PROVIDERS = (
     ["CUDAExecutionProvider"] if DEVICE == "cuda"

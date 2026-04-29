@@ -4,7 +4,7 @@ python-multipart==0.0.9
 ultralytics>=8.4.0
 git+https://github.com/openai/CLIP.git
 insightface==0.7.3
-onnxruntime-gpu==1.19.2
+onnxruntime==1.19.2
 psycopg2-binary==2.9.9
 pgvector==0.3.2
 Pillow==10.4.0

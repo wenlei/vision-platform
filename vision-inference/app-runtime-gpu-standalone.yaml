@@ -1,0 +1,31 @@
+device: gpu
+
+database:
+  host: postgres
+  port: 5432
+  user: wenlei
+  password: wenlei
+  name: vision_db
+
+storage:
+  mode: retention
+  path: /app/images
+  retention_hours: 72
+  cleanup:
+    schedule: interval
+    interval_hours: 6
+    daily_time: "03:00"
+
+face:
+  threshold_high: 0.75
+  threshold_low: 0.40
+
+camera:
+  source: ${CAM_STREAM_URL}
+
+logging:
+  level: INFO
+  format: "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+server:
+  workers: 1

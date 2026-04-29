@@ -1,0 +1,53 @@
+# =============================================================
+# app-runtime-cpu.yaml -- vision-inference CPU 运行时配置
+#
+# 由 app-runtime.yaml 复制而来，仅修改两处：
+#   device: cpu（使用 YOLO26N 小模型）
+#   database.host: localhost（容器内嵌 PostgreSQL 16）
+# =============================================================
+
+
+# -- 运行模式 --------------------------------------------------
+device: cpu
+
+
+# -- 数据库 ----------------------------------------------------
+database:
+host: postgres
+  port: 5432
+  user: wenlei
+  password: wenlei
+  name: vision_db
+
+
+# -- 图片存储 --------------------------------------------------
+storage:
+  mode: retention
+  path: /app/images
+  retention_hours: 72
+  cleanup:
+    schedule: interval
+    interval_hours: 6
+    daily_time: "03:00"
+
+
+# -- 人脸识别阈值 ----------------------------------------------
+face:
+  threshold_high: 0.75
+  threshold_low: 0.40
+
+
+# -- 摄像头 ----------------------------------------------------
+camera:
+  source: ${CAM_STREAM_URL}
+
+
+# -- 日志 ------------------------------------------------------
+logging:
+  level: INFO
+  format: "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+
+# -- 服务器 ----------------------------------------------------
+server:
+  workers: 1

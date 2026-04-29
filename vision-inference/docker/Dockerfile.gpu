@@ -14,7 +14,7 @@ COPY docker/requirements.gpu.txt .
 RUN pip install --no-cache-dir -r requirements.gpu.txt
 
 RUN python3 -c "import clip; clip.load('ViT-B/32', device='cpu'); print('CLIP downloaded')"
-RUN python3 -c "from ultralytics import YOLO; YOLO('yolo11l.pt'); print('YOLO11L downloaded')"
+RUN python3 -c "from ultralytics import YOLO; YOLO('yolo26l.pt'); print('YOLO26L downloaded')"
 
 COPY api/ ./api/
 COPY app-runtime.yaml .
