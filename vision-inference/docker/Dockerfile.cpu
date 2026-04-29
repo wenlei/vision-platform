@@ -5,9 +5,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --extra-index-url https://download.pytorch.org/whl/cpu --trusted-host pypi.tuna.tsinghua.edu.cn torch torchvision
 COPY docker/requirements.cpu.txt .
-RUN pip install --no-cache-dir -r requirements.cpu.txt
+RUN pip install --no-cache-dir -r requirements.cpu.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
 
 RUN python3 -c "import clip; clip.load('ViT-B/32', device='cpu'); print('CLIP downloaded')"
 RUN python3 -c "from ultralytics import YOLO; YOLO('yolo26n.pt'); print('YOLO26N downloaded')"
