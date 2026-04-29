@@ -1,5 +1,9 @@
 # vision-platform
 
+<img width="1123" height="824" alt="Screenshot 2026-04-29 at 11 34 23 AM" src="https://github.com/user-attachments/assets/09337c5e-3960-44d4-8c7d-77fd4bc7e227" />
+<img width="1442" height="824" alt="Screenshot 2026-04-29 at 11 34 04 AM" src="https://github.com/user-attachments/assets/29d60558-7d76-4a3b-97b1-04b3182a34ab" />
+<img width="1442" height="824" alt="Screenshot 2026-04-29 at 11 33 50 AM" src="https://github.com/user-attachments/assets/e9ab1b6b-a944-4211-8241-d2a72e682592" />
+
 > **Version:** 20260419
 
 ESP32-S3 desk camera system with GPU-accelerated vision inference — YOLO11L detection, CLIP custom item matching, InsightFace face recognition.
