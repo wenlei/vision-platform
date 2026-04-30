@@ -9,11 +9,18 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --ext
 COPY docker/requirements.cpu.txt .
 RUN pip install --no-cache-dir -r requirements.cpu.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
 
-RUN python3 -c "import clip; clip.load('ViT-B/32', device='cpu'); print('CLIP downloaded')"
-RUN python3 -c "from ultralytics import YOLO; YOLO('yolo26n.pt'); print('YOLO26N downloaded')"
-
 COPY api/ ./api/
 COPY UI/ ./UI/
+
+RUN for i in 1 2 3; do \
+        python3 -c "import clip; clip.load('ViT-B/32', device='cpu'); print('CLIP downloaded')" && break || sleep 10; \
+    done && \
+    for i in 1 2 3; do \
+        python3 -c "from ultralytics import YOLO; YOLO('yolo26n.pt'); print('YOLO26N downloaded')" && break || sleep 10; \
+    done && \
+    for i in 1 2 3; do \
+        python3 -c "from insightface.app import FaceAnalysis; app = FaceAnalysis(name='buffalo_s', providers=['CPUExecutionProvider']); app.prepare(ctx_id=-1); print('InsightFace downloaded')" && break || sleep 10; \
+    done
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
