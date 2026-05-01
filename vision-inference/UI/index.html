@@ -382,6 +382,15 @@
               <div style="font-size:10px;color:var(--text3);margin-bottom:3px">标签（Tag）</div>
               <input type="text" id="dev-tag" placeholder="多标签用逗号分隔，如 desk,kitchen" style="width:100%">
             </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">功能</div>
+              <select id="dev-capability" style="width:100%">
+                <option value="video_in">视频输入（Camera）</option>
+                <option value="audio_in">音频输入（Microphone）</option>
+                <option value="video_audio_in">视频+音频</option>
+                <option value="sensor">传感器</option>
+              </select>
+            </div>
             <div class="row" style="gap:8px">
               <button class="btn primary" onclick="registerDevice()">保存</button>
               <button class="btn" onclick="clearDevForm()" style="color:var(--text3)">清空</button>
@@ -422,7 +431,7 @@
         <div class="card-title">已注册设备 <span id="devices-count" style="color:var(--text3)"></span></div>
         <table class="list-table" id="devices-table">
           <thead><tr>
-            <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>标签</th><th>OTA</th>
+            <th>设备名</th><th>MAC</th><th>IP</th><th>位置</th><th>标签</th><th>功能</th><th>OTA</th>
           </tr></thead>
           <tbody id="devices-tbody">
             <tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>

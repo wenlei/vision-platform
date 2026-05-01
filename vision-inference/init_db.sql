@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS devices (
     vflip         SMALLINT     NOT NULL DEFAULT 0,
     is_default    BOOLEAN      NOT NULL DEFAULT FALSE,
     tag           VARCHAR(64),
+    capability    VARCHAR(32)  NOT NULL DEFAULT 'video_in',
     registered_at TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 -- 幂等添加新列（已有旧表时）
@@ -38,6 +39,7 @@ ALTER TABLE devices ADD COLUMN IF NOT EXISTS hmirror      SMALLINT NOT NULL DEFA
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS vflip        SMALLINT NOT NULL DEFAULT 0;
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_default   BOOLEAN  NOT NULL DEFAULT FALSE;
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS tag          VARCHAR(64);
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS capability   VARCHAR(32) NOT NULL DEFAULT 'video_in';
 
 -- -------------------------------------------------------------
 -- vision_log  检测记录表

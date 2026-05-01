@@ -1474,14 +1474,14 @@ function fillDiscovered(val) {
 
 async function loadDeviceList() {
   const tbody = document.getElementById('devices-tbody');
-  tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text3)">加载中...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text3)">加载中...</td></tr>';
   try {
     const r = await fetch(API + '/devices');
     const data = await r.json();
     const devices = data.devices || [];
     document.getElementById('devices-count').textContent = `(${devices.length})`;
     if (!devices.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text3)">暂无注册设备</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text3)">暂无注册设备</td></tr>';
       return;
     }
     tbody.innerHTML = '';
@@ -1510,6 +1510,11 @@ async function loadDeviceList() {
         tdTag.style.color = 'var(--text3)';
         tdTag.textContent = '-';
       }
+      // Capability column
+      const tdCap = document.createElement('td');
+      const capMap = {video_in:['视频','#3b82f6'], audio_in:['音频','#22c55e'], video_audio_in:['视频+音频','#a855f7'], sensor:['传感器','#f97316']};
+      const [capLabel, capColor] = capMap[d.capability] || ['视频','#3b82f6'];
+      tdCap.innerHTML = `<span style="display:inline-block;background:${capColor}22;border:1px solid ${capColor}44;border-radius:4px;padding:1px 6px;font-size:11px;color:${capColor}">${capLabel}</span>`;
       // OTA button
       const tdOta = document.createElement('td');
       tdOta.onclick = e => e.stopPropagation();  // don't trigger row edit
@@ -1526,11 +1531,11 @@ async function loadDeviceList() {
         inp.click();
       };
       tdOta.appendChild(otaBtn);
-      tr.append(tdName, tdMac, tdIp, tdLoc, tdTag, tdOta);
+      tr.append(tdName, tdMac, tdIp, tdLoc, tdTag, tdCap, tdOta);
       tbody.appendChild(tr);
     });
   } catch {
-    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--red)">加载失败</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--red)">加载失败</td></tr>';
   }
 }
 
@@ -1595,6 +1600,7 @@ async function editDevice(mac) {
     document.getElementById('dev-url').value  = d.stream_url || '';
     document.getElementById('dev-desc').value = d.description || '';
     document.getElementById('dev-tag').value  = d.tag || '';
+    document.getElementById('dev-capability').value = d.capability || 'video_in';
     document.getElementById('dev-register-result').textContent = '';
     // Show cam control panel and fetch live status
     document.getElementById('dev-cam-ctrl').style.display = '';
@@ -1651,6 +1657,7 @@ function clearDevForm() {
     el.readOnly = false;
     el.style.color = '';
   });
+  document.getElementById('dev-capability').value = 'video_in';
   document.getElementById('dev-register-result').textContent = '';
   const discSel = document.getElementById('dev-discovered');
   if (discSel) discSel.value = '';
@@ -1673,6 +1680,7 @@ async function registerDevice() {
   const url  = document.getElementById('dev-url').value.trim();
   const desc = document.getElementById('dev-desc').value.trim();
   const tag  = document.getElementById('dev-tag').value.trim();
+  const cap  = document.getElementById('dev-capability').value;
   const result = document.getElementById('dev-register-result');
   if (!name) { toast('设备名为必填项', 'err'); return; }
   result.textContent = '保存中...';
@@ -1682,14 +1690,14 @@ async function registerDevice() {
     r = await fetch(API + '/devices/' + encodeURIComponent(_editingMac), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null, tag: tag||null }),
+      body: JSON.stringify({ name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null, tag: tag||null, capability: cap }),
     });
   } else {
     if (!mac) { toast('MAC 地址为必填项', 'err'); return; }
     r = await fetch(API + '/devices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mac, name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null, tag: tag||null }),
+      body: JSON.stringify({ mac, name, ip: ip||null, location: loc||null, stream_url: url||null, description: desc||null, tag: tag||null, capability: cap }),
     });
   }
   const d = await r.json();

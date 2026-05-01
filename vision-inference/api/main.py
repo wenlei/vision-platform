@@ -49,6 +49,7 @@ try:
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS vflip       SMALLINT NOT NULL DEFAULT 0")
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_default  BOOLEAN  NOT NULL DEFAULT FALSE")
         cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS tag         VARCHAR(64)")
+        cur.execute("ALTER TABLE devices ADD COLUMN IF NOT EXISTS capability  VARCHAR(32) NOT NULL DEFAULT 'video_in'")
         cur.execute("""CREATE TABLE IF NOT EXISTS tag_endpoints (
             tag          VARCHAR(64) NOT NULL,
             endpoint_key VARCHAR(64) NOT NULL,
