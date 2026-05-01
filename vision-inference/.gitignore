@@ -5,3 +5,4 @@ images/
 .env
 !.env.example  # 模板文件进 Git
 docker/models/
+tests/fixtures/
