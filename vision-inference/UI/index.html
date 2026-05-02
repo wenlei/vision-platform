@@ -384,12 +384,20 @@
             </div>
             <div>
               <div style="font-size:10px;color:var(--text3);margin-bottom:3px">功能</div>
-              <select id="dev-capability" style="width:100%">
-                <option value="video_in">视频输入（Camera）</option>
-                <option value="audio_in">音频输入（Microphone）</option>
-                <option value="video_audio_in">视频+音频</option>
-                <option value="sensor">传感器</option>
-              </select>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px" id="dev-capability-group">
+                <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+                  <input type="checkbox" name="dev-capability" value="video_in" checked> 视频输入
+                </label>
+                <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+                  <input type="checkbox" name="dev-capability" value="audio_in"> 音频输入
+                </label>
+                <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+                  <input type="checkbox" name="dev-capability" value="video_audio_in"> 视频+音频
+                </label>
+                <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+                  <input type="checkbox" name="dev-capability" value="sensor"> 传感器
+                </label>
+              </div>
             </div>
             <div class="row" style="gap:8px">
               <button class="btn primary" onclick="registerDevice()">保存</button>
@@ -582,6 +590,6 @@
 
 <div id="toast"></div>
 
-<script src="/ui/app.js?v=20260417h"></script>
+<script src="/ui/app.js?v=20260501"></script>
 </body>
 </html>

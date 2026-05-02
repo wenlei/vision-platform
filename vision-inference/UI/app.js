@@ -1510,11 +1510,14 @@ async function loadDeviceList() {
         tdTag.style.color = 'var(--text3)';
         tdTag.textContent = '-';
       }
-      // Capability column
+      // Capability column (multi-select, comma-separated)
       const tdCap = document.createElement('td');
       const capMap = {video_in:['视频','#3b82f6'], audio_in:['音频','#22c55e'], video_audio_in:['视频+音频','#a855f7'], sensor:['传感器','#f97316']};
-      const [capLabel, capColor] = capMap[d.capability] || ['视频','#3b82f6'];
-      tdCap.innerHTML = `<span style="display:inline-block;background:${capColor}22;border:1px solid ${capColor}44;border-radius:4px;padding:1px 6px;font-size:11px;color:${capColor}">${capLabel}</span>`;
+      const caps = (d.capability || 'video_in').split(',').map(s => s.trim()).filter(Boolean);
+      tdCap.innerHTML = caps.map(c => {
+        const [label, color] = capMap[c] || [c, '#6b7280'];
+        return `<span style="display:inline-block;background:${color}22;border:1px solid ${color}44;border-radius:4px;padding:1px 6px;font-size:11px;color:${color};margin-right:3px">${label}</span>`;
+      }).join('');
       // OTA button
       const tdOta = document.createElement('td');
       tdOta.onclick = e => e.stopPropagation();  // don't trigger row edit
@@ -1600,7 +1603,11 @@ async function editDevice(mac) {
     document.getElementById('dev-url').value  = d.stream_url || '';
     document.getElementById('dev-desc').value = d.description || '';
     document.getElementById('dev-tag').value  = d.tag || '';
-    document.getElementById('dev-capability').value = d.capability || 'video_in';
+    // Restore capability checkboxes
+    const caps = (d.capability || 'video_in').split(',').map(s => s.trim());
+    document.querySelectorAll('input[name="dev-capability"]').forEach(cb => {
+      cb.checked = caps.includes(cb.value);
+    });
     document.getElementById('dev-register-result').textContent = '';
     // Show cam control panel and fetch live status
     document.getElementById('dev-cam-ctrl').style.display = '';
@@ -1657,7 +1664,10 @@ function clearDevForm() {
     el.readOnly = false;
     el.style.color = '';
   });
-  document.getElementById('dev-capability').value = 'video_in';
+  // Reset capability checkboxes to default (video_in only)
+  document.querySelectorAll('input[name="dev-capability"]').forEach(cb => {
+    cb.checked = cb.value === 'video_in';
+  });
   document.getElementById('dev-register-result').textContent = '';
   const discSel = document.getElementById('dev-discovered');
   if (discSel) discSel.value = '';
@@ -1680,7 +1690,8 @@ async function registerDevice() {
   const url  = document.getElementById('dev-url').value.trim();
   const desc = document.getElementById('dev-desc').value.trim();
   const tag  = document.getElementById('dev-tag').value.trim();
-  const cap  = document.getElementById('dev-capability').value;
+  const caps = Array.from(document.querySelectorAll('input[name="dev-capability"]:checked')).map(cb => cb.value);
+  const cap  = caps.join(',') || 'video_in';
   const result = document.getElementById('dev-register-result');
   if (!name) { toast('设备名为必填项', 'err'); return; }
   result.textContent = '保存中...';

@@ -27,6 +27,8 @@ def _row_to_dict(r):
             ip = r[5].split("//")[-1].split(":")[0].split("/")[0]
         except Exception:
             pass
+    cap_raw = r[12] if len(r) > 12 else "video_in"
+    cap_list = [c.strip() for c in (cap_raw or "video_in").split(",") if c.strip()]
     return {
         "mac":          r[0],
         "name":         r[1],
@@ -40,7 +42,7 @@ def _row_to_dict(r):
         "vflip":        r[9] if len(r) > 9 else 0,
         "is_default":   bool(r[10]) if len(r) > 10 else False,
         "tag":          r[11] if len(r) > 11 else None,
-        "capability":   r[12] if len(r) > 12 else "video_in",
+        "capability":   cap_list,
     }
 
 
