@@ -1474,14 +1474,14 @@ function fillDiscovered(val) {
 
 async function loadDeviceList() {
   const tbody = document.getElementById('devices-tbody');
-  tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text3)">加载中...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text3)">加载中...</td></tr>';
   try {
     const r = await fetch(API + '/devices');
     const data = await r.json();
     const devices = data.devices || [];
     document.getElementById('devices-count').textContent = `(${devices.length})`;
     if (!devices.length) {
-      tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text3)">暂无注册设备</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text3)">暂无注册设备</td></tr>';
       return;
     }
     tbody.innerHTML = '';
@@ -1518,6 +1518,36 @@ async function loadDeviceList() {
         const [label, color] = capMap[c] || [c, '#6b7280'];
         return `<span style="display:inline-block;background:${color}22;border:1px solid ${color}44;border-radius:4px;padding:1px 6px;font-size:11px;color:${color};margin-right:3px">${label}</span>`;
       }).join('');
+      // Resolution column (only for video capable devices)
+      const tdRes = document.createElement('td');
+      tdRes.style.cssText = 'font-size:11px';
+      const isVideo = caps.includes('video_in') || caps.includes('video_audio_in');
+      if (isVideo) {
+        const resId = 'res-' + d.mac.replace(/:/g, '_');
+        tdRes.innerHTML = `<div style="display:flex;gap:4px;align-items:center">
+          <select id="${resId}" style="width:110px;height:24px;padding:0 4px;border-radius:4px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:10px">
+            <option value="QQVGA">QQVGA 160×120</option>
+            <option value="QVGA">QVGA 320×240</option>
+            <option value="VGA">VGA 640×480</option>
+            <option value="SVGA">SVGA 800×600</option>
+            <option value="XGA">XGA 1024×768</option>
+            <option value="HD">HD 1280×720</option>
+            <option value="SXGA">SXGA 1280×960</option>
+            <option value="UXGA">UXGA 1600×1200</option>
+          </select>
+          <button class="btn" onclick="applyInlineCamConfig('${d.mac.replace(/'/g, "\\'")}','${resId}')" style="padding:2px 6px;font-size:10px;white-space:nowrap">应用</button>
+        </div>`;
+        // Fetch current resolution for this device
+        fetch(`\${API}/devices/camstatus/${d.mac}`).then(r => r.json()).then(d2 => {
+          const sel = document.getElementById(resId);
+          if (sel && d2.resolution) {
+            for (const o of sel.options) { if (o.value === d2.resolution) { sel.value = d2.resolution; break; } }
+          }
+        }).catch(() => {});
+      } else {
+        tdRes.style.color = 'var(--text3)';
+        tdRes.textContent = '-';
+      }
       // OTA button
       const tdOta = document.createElement('td');
       tdOta.onclick = e => e.stopPropagation();  // don't trigger row edit
@@ -1534,11 +1564,11 @@ async function loadDeviceList() {
         inp.click();
       };
       tdOta.appendChild(otaBtn);
-      tr.append(tdName, tdMac, tdIp, tdLoc, tdTag, tdCap, tdOta);
+      tr.append(tdName, tdMac, tdIp, tdLoc, tdTag, tdCap, tdRes, tdOta);
       tbody.appendChild(tr);
     });
   } catch {
-    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--red)">加载失败</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="color:var(--red)">加载失败</td></tr>';
   }
 }
 
@@ -1609,9 +1639,10 @@ async function editDevice(mac) {
       cb.checked = caps.includes(cb.value);
     });
     document.getElementById('dev-register-result').textContent = '';
-    // Show cam control panel and fetch live status
-    document.getElementById('dev-cam-ctrl').style.display = '';
-    fetchCamStatus();
+    // Show cam control panel only for video-capable devices
+    const showCam = (d.capability || '').includes('video_in');
+    document.getElementById('dev-cam-ctrl').style.display = showCam ? '' : 'none';
+    if (showCam) fetchCamStatus();
   } catch { toast('加载设备信息失败', 'err'); }
 }
 
@@ -1632,6 +1663,17 @@ async function fetchCamStatus() {
     el.style.color = 'var(--text3)';
     el.textContent = `当前：${res} · RSSI ${d.rssi ?? '-'} dBm · 运行 ${d.uptime_sec ?? '-'}s · 堆 ${d.free_heap ? (d.free_heap/1024).toFixed(0)+'KB' : '-'}`;
   } catch { el.textContent = '查询失败'; }
+}
+
+async function applyInlineCamConfig(mac, resId) {
+  const sel = document.getElementById(resId);
+  if (!sel) return;
+  const framesize = sel.value;
+  try {
+    const r = await fetch(API + '/devices/camconfig/' + encodeURIComponent(mac) + '?framesize=' + framesize, { method: 'POST' });
+    if (r.ok) { toast(`已切换 → ${framesize}`, 'ok'); }
+    else { toast('下发失败', 'err'); }
+  } catch { toast('下发失败', 'err'); }
 }
 
 async function applyCamConfig() {
