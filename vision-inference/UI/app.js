@@ -2404,11 +2404,45 @@ async function startListen() {
     if (d.status === 'recording_started') {
       listenLog(logEl, '录音已启动，等待5秒...');
       waveInfo.textContent = '🔴 录音中... (5秒)';
+      waveContainer.style.display = '';
+
+      // 实时绘制录音中的模拟波形（等待服务器返回）
+      const ctx = waveCanvas.getContext('2d');
+      let recFrame = 0;
+      const recAnim = setInterval(() => {
+        recFrame++;
+        const width = waveCanvas.width;
+        const height = waveCanvas.height;
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, width, height);
+
+        // 模拟音频波形（正弦波 + 随机噪声，模拟真实音频）
+        const barCount = 80;
+        const barWidth = width / barCount;
+        for (let i = 0; i < barCount; i++) {
+          const phase = (i / barCount) * Math.PI * 4 + recFrame * 0.15;
+          const noise = Math.random() * 0.3;
+          const val = (Math.sin(phase) * 0.5 + noise) * 0.6;
+          const barHeight = Math.max(2, val * (height - 10));
+          const hue = 0 + val * 120;
+          ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+          ctx.fillRect(i * barWidth + 1, height / 2 - barHeight / 2, barWidth - 2, barHeight);
+        }
+        // 中心线
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, height / 2);
+        ctx.lineTo(width, height / 2);
+        ctx.stroke();
+        waveLevel.textContent = `录音中... ${Math.min(5, Math.floor(recFrame / 10))}/5s`;
+      }, 80);
 
       // 等待录音+上传完成
       await new Promise(resolve => setTimeout(resolve, 8000));
+      clearInterval(recAnim);
 
-      // 从服务器获取 ESP32 的录音（用设备名查询，因为 ESP32 发送的是设备名）
+      // 从服务器获取 ESP32 的录音
       statusEl.textContent = '获取录音...';
       waveInfo.textContent = '📥 从服务器获取录音...';
       listenLog(logEl, '从服务器获取 ESP32 录音...');
