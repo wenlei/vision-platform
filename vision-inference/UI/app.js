@@ -1512,7 +1512,7 @@ async function loadDeviceList() {
       }
       // Capability column (multi-select, comma-separated)
       const tdCap = document.createElement('td');
-      const capMap = {video_in:['视频','#3b82f6'], audio_in:['音频','#22c55e'], video_audio_in:['视频+音频','#a855f7'], sensor:['传感器','#f97316']};
+      const capMap = {video_in:['视频','#3b82f6'], audio_in:['音频','#22c55e'], sensor:['传感器','#f97316']};
       const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',').map(s => s.trim()).filter(Boolean);
       tdCap.innerHTML = caps.map(c => {
         const [label, color] = capMap[c] || [c, '#6b7280'];
@@ -1521,7 +1521,7 @@ async function loadDeviceList() {
       // Resolution column (only for video capable devices)
       const tdRes = document.createElement('td');
       tdRes.style.cssText = 'font-size:11px';
-      const isVideo = caps.includes('video_in') || caps.includes('video_audio_in');
+      const isVideo = caps.includes('video_in');
       if (isVideo) {
         const resId = 'res-' + d.mac.replace(/:/g, '_');
         tdRes.innerHTML = `<div style="display:flex;gap:4px;align-items:center">
