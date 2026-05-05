@@ -2408,12 +2408,12 @@ async function startListen() {
       // 等待录音+上传完成
       await new Promise(resolve => setTimeout(resolve, 8000));
 
-      // 从服务器获取 ESP32 的录音
+      // 从服务器获取 ESP32 的录音（用设备名查询，因为 ESP32 发送的是设备名）
       statusEl.textContent = '获取录音...';
       waveInfo.textContent = '📥 从服务器获取录音...';
       listenLog(logEl, '从服务器获取 ESP32 录音...');
 
-      const audioR = await fetch(`${API}/audio/latest?device=${encodeURIComponent(dev.mac)}`, {
+      const audioR = await fetch(`${API}/audio/latest?device=${encodeURIComponent(dev.name)}`, {
         signal: AbortSignal.timeout(10000),
       });
 
