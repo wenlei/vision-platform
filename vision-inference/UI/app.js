@@ -2566,6 +2566,14 @@ async function startBrowserMic() {
   const waveLevel = document.getElementById('waveform-level');
   const waveInfo = document.getElementById('waveform-info');
 
+  // 检查浏览器是否支持 getUserMedia
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    statusEl.textContent = '浏览器不支持麦克风（需 HTTPS 或 localhost）';
+    statusEl.style.color = 'var(--red)';
+    listenLog(logEl, 'navigator.mediaDevices 不可用 — 请用 localhost 访问页面，或在 Chrome 中启用 insecure origin 白名单');
+    return;
+  }
+
   statusEl.textContent = '请求麦克风权限...';
   statusEl.style.color = 'var(--blue)';
   listenLog(logEl, '请求浏览器麦克风权限...');
