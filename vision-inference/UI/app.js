@@ -2175,3 +2175,98 @@ document.addEventListener('DOMContentLoaded', () => {
   const apiInput = document.getElementById('cfg-api');
   if (apiInput) apiInput.value = API;
 });
+
+// ── Listen 页面 ─────────────────────────────────────────────
+let listenDevice = '';
+
+async function loadListenDevices() {
+  const sel = document.getElementById('listen-device');
+  if (!sel) return;
+  try {
+    const r = await fetch(API + '/devices');
+    const data = await r.json();
+    const devices = data.devices || [];
+    const audioDevices = devices.filter(d => {
+      const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',');
+      return caps.includes('audio_in');
+    });
+    sel.innerHTML = '';
+    if (audioDevices.length === 0) {
+      sel.innerHTML = '<option value="">无音频设备</option>';
+      return;
+    }
+    audioDevices.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.ip;
+      opt.textContent = `${d.name || d.ip} (${d.ip})`;
+      sel.appendChild(opt);
+    });
+    listenDevice = audioDevices[0].ip;
+  } catch { sel.innerHTML = '<option value="">加载失败</option>'; }
+}
+
+async function startListen() {
+  const statusEl = document.getElementById('listen-status');
+  const logEl = document.getElementById('listen-log');
+  const playerEl = document.getElementById('listen-player');
+  const deviceIp = document.getElementById('listen-device').value;
+  if (!deviceIp) { toast('请先选择音频设备', 'err'); return; }
+
+  statusEl.textContent = '录音中... (5秒)';
+  statusEl.style.color = 'var(--blue)';
+  listenLog(logEl, `触发录音: ${deviceIp}`);
+
+  try {
+    const r = await fetch(`http://${deviceIp}/record`, { method: 'POST', signal: AbortSignal.timeout(30000) });
+    const d = await r.json();
+    if (d.status === 'recording_started') {
+      listenLog(logEl, '录音已启动，等待5秒...');
+
+      // 等待录音+上传+处理完成
+      await new Promise(resolve => setTimeout(resolve, 8000));
+
+      // 获取音频响应
+      statusEl.textContent = '获取音频...';
+      const audioR = await fetch(`${API}/audio/infer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/pcm', 'X-Sample-Rate': '16000', 'X-Device': 'desk-cam-03' },
+        body: new ArrayBuffer(16000),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (audioR.ok) {
+        const audioData = await audioR.arrayBuffer();
+        const audioBlob = new Blob([audioData], { type: 'audio/pcm' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+
+        playerEl.innerHTML = `
+          <audio controls style="width:100%;height:40px" src="${audioUrl}"></audio>
+          <p style="font-size:11px;color:var(--text3);margin-top:6px">采样率: 16000Hz · 时长: ${(audioData.byteLength/16000/2).toFixed(1)}s</p>
+        `;
+        statusEl.textContent = '音频就绪 ✅';
+        statusEl.style.color = 'var(--green)';
+        listenLog(logEl, `收到音频 ${(audioData.byteLength/1024).toFixed(1)}KB`);
+      } else {
+        statusEl.textContent = '获取失败';
+        statusEl.style.color = 'var(--red)';
+      }
+    } else {
+      statusEl.textContent = d.error || '录音失败';
+      statusEl.style.color = 'var(--red)';
+    }
+  } catch (e) {
+    statusEl.textContent = '请求失败: ' + e.message;
+    statusEl.style.color = 'var(--red)';
+    listenLog(logEl, '错误: ' + e.message);
+  }
+}
+
+function listenLog(logEl, msg) {
+  if (!logEl) return;
+  if (logEl.querySelector('p')) logEl.innerHTML = '';
+  const time = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.textContent = `[${time}] ${msg}`;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}

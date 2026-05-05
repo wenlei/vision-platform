@@ -45,6 +45,7 @@ WebServer server(80);
 int8_t* audioBuf = nullptr;
 volatile bool recording = false;
 volatile bool playing = false;
+volatile bool recordTriggered = false;
 String deviceIP = "";
 
 // ── 麦克风初始化 ──────────────────────────────────────────
@@ -170,6 +171,19 @@ void handleStatus() {
     server.send(200, "application/json", json);
 }
 
+// ── POST /record ──────────────────────────────────────────
+// HTTP 远程触发录音，替代 BOOT 物理按键。
+// 返回 200 表示录音已启动，实际录音在 loop() 中异步执行。
+void handleRecord() {
+    if (recording || playing) {
+        server.send(503, "application/json", "{\"error\":\"busy\",\"recording\":" + String(recording ? "true" : "false") + ",\"playing\":" + String(playing ? "true" : "false") + "}");
+        return;
+    }
+    recordTriggered = true;
+    Serial.println("[HTTP] 远程触发录音");
+    server.send(200, "application/json", "{\"status\":\"recording_started\"}");
+}
+
 // ── Wi-Fi 连接 ────────────────────────────────────────────
 void wifiConnect() {
     IPAddress localIP(192, 168, 50, 99);
@@ -215,6 +229,7 @@ void setup() {
     spkInit();
 
     server.on("/status", handleStatus);
+    server.on("/record", HTTP_POST, handleRecord);
     server.begin();
     Serial.println("[HTTP] 服务器启动");
     Serial.println("[READY] 按 BOOT 键开始录音");
@@ -224,15 +239,19 @@ void setup() {
 void loop() {
     server.handleClient();
 
-    // 检测按键（低电平触发）
-    if (digitalRead(PIN_BUTTON) == LOW && !recording && !playing) {
-        delay(50);  // 消抖
-        if (digitalRead(PIN_BUTTON) == LOW) {
-            recording = true;
+    // 远程触发录音（HTTP /record）或物理按键触发
+    if ((recordTriggered || digitalRead(PIN_BUTTON) == LOW) && !recording && !playing) {
+        if (recordTriggered) {
+            recordTriggered = false;
+            Serial.println("[HTTP] 远程录音开始");
+        } else {
+            delay(50);  // 消抖
+            if (digitalRead(PIN_BUTTON) != LOW) return;
             Serial.println("[BTN] 按键触发");
-            size_t len = recordAudio();
-            recording = false;
-            sendAudio(len);
         }
+        recording = true;
+        size_t len = recordAudio();
+        recording = false;
+        sendAudio(len);
     }
 }

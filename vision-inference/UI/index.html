@@ -38,6 +38,9 @@
     <div class="nav-item" data-page="devices">
       <span class="nav-icon">📡</span><span class="nav-label">Devices</span>
     </div>
+    <div class="nav-item" data-page="listen">
+      <span class="nav-icon">🎧</span><span class="nav-label">Listen</span>
+    </div>
     <div class="nav-item" data-page="api">
       <span class="nav-icon">🔗</span><span class="nav-label">API</span>
     </div>
@@ -446,6 +449,38 @@
         <input type="file" id="ota-file-input" accept=".bin" style="display:none" onchange="handleOtaFile(event)">
       </div>
 
+    </div>
+  </div>
+
+  <!-- ══ Listen ══════════════════════════════════════════════ -->
+  <div class="page" id="page-listen">
+    <div class="page-header">
+      <span class="page-title">🎧 音频监听</span>
+      <button class="btn" onclick="loadListenDevices()">↺ 刷新</button>
+    </div>
+    <div class="page-body">
+      <div class="card">
+        <div class="card-title">选择音频设备</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="listen-device" style="width:200px;height:36px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px">
+            <option value="">加载中...</option>
+          </select>
+          <button class="btn" onclick="startListen()" style="padding:6px 16px">🎤 录音 5s</button>
+          <span id="listen-status" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-title">录音回放</div>
+        <div id="listen-player" style="padding:12px 0">
+          <p style="color:var(--text3);font-size:12px">暂无录音。点击"录音"按钮后音频将在此播放。</p>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-title">音频日志</div>
+        <div id="listen-log" style="max-height:200px;overflow-y:auto;font-family:monospace;font-size:11px;color:var(--text2);line-height:1.6">
+          <p style="color:var(--text3)">暂无日志</p>
+        </div>
+      </div>
     </div>
   </div>
 
