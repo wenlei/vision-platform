@@ -1513,7 +1513,7 @@ async function loadDeviceList() {
       // Capability column (multi-select, comma-separated)
       const tdCap = document.createElement('td');
       const capMap = {video_in:['视频','#3b82f6'], audio_in:['音频','#22c55e'], video_audio_in:['视频+音频','#a855f7'], sensor:['传感器','#f97316']};
-      const caps = (d.capability || 'video_in').split(',').map(s => s.trim()).filter(Boolean);
+      const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',').map(s => s.trim()).filter(Boolean);
       tdCap.innerHTML = caps.map(c => {
         const [label, color] = capMap[c] || [c, '#6b7280'];
         return `<span style="display:inline-block;background:${color}22;border:1px solid ${color}44;border-radius:4px;padding:1px 6px;font-size:11px;color:${color};margin-right:3px">${label}</span>`;
@@ -1634,7 +1634,7 @@ async function editDevice(mac) {
     document.getElementById('dev-desc').value = d.description || '';
     document.getElementById('dev-tag').value  = d.tag || '';
     // Restore capability checkboxes
-    const caps = (d.capability || 'video_in').split(',').map(s => s.trim());
+    const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',').map(s => s.trim());
     document.querySelectorAll('input[name="dev-capability"]').forEach(cb => {
       cb.checked = caps.includes(cb.value);
     });
