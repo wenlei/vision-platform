@@ -28,6 +28,7 @@ from api.groups import router as groups_router
 from api.bindings import router as bindings_router
 from api.ota import router as ota_router
 from api.runtime_config import router as runtime_config_router
+from api.audio import router as audio_router
 
 app.include_router(health_router)
 app.include_router(detection_router)
@@ -40,6 +41,7 @@ app.include_router(groups_router)
 app.include_router(bindings_router)
 app.include_router(ota_router)
 app.include_router(runtime_config_router)
+app.include_router(audio_router)
 
 # ── 自动 migration：按需添加新列 ──────────────────────────────
 try:
