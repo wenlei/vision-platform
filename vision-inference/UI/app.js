@@ -1538,7 +1538,7 @@ async function loadDeviceList() {
           <button class="btn" onclick="applyInlineCamConfig('${d.mac.replace(/'/g, "\\'")}','${resId}')" style="padding:2px 6px;font-size:10px;white-space:nowrap">应用</button>
         </div>`;
         // Fetch current resolution for this device
-        fetch(`\${API}/devices/camstatus/${d.mac}`).then(r => r.json()).then(d2 => {
+        fetch(`${API}/devices/camstatus/${d.mac}`).then(r => r.json()).then(d2 => {
           const sel = document.getElementById(resId);
           if (sel && d2.resolution) {
             for (const o of sel.options) { if (o.value === d2.resolution) { sel.value = d2.resolution; break; } }
