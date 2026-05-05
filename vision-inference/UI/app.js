@@ -328,9 +328,18 @@ async function loadCamBar() {
       bar.innerHTML = '<span style="color:var(--text3);font-size:11px">无注册设备 — 前往 Devices 页注册摄像头</span>';
       return;
     }
-    _devices = devices;
+    // 只显示有 video_in 能力的设备
+    const videoDevices = devices.filter(d => {
+      const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',');
+      return caps.includes('video_in');
+    });
+    if (!videoDevices.length) {
+      bar.innerHTML = '<span style="color:var(--text3);font-size:11px">无视频设备 — 仅 audio 设备不支持 Live 预览</span>';
+      return;
+    }
+    _devices = videoDevices;
     bar.innerHTML = '';
-    devices.forEach(d => {
+    videoDevices.forEach(d => {
       const key = (d.mac || d.ip || '').replace(/[^a-z0-9]/gi, '');
       const dotId = 'cbdot-' + key;
       const isActive = d.stream_url && d.stream_url === source;
