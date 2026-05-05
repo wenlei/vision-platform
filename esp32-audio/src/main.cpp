@@ -26,9 +26,9 @@
 #define PIN_BUTTON      0       // BOOT 按键
 #define I2S_MIC_CLK     42      // PDM 麦克风时钟
 #define I2S_MIC_DATA    41      // PDM 麦克风数据
-#define I2S_SPK_BCLK    2       // MAX98357A BCLK
-#define I2S_SPK_LRC     3       // MAX98357A LRC
-#define I2S_SPK_DOUT    1       // MAX98357A DIN
+#define I2S_SPK_BCLK    8       // MAX98357A BCLK
+#define I2S_SPK_LRC     7       // MAX98357A LRC
+#define I2S_SPK_DOUT    9       // MAX98357A DIN
 
 // ── 音频参数 ──────────────────────────────────────────────
 #define SAMPLE_RATE     16000
@@ -184,6 +184,38 @@ void handleRecord() {
     server.send(200, "application/json", "{\"status\":\"recording_started\"}");
 }
 
+// ── POST /speak ──────────────────────────────────────────
+// 接收服务器推送的音频数据并通过 I2S 扬声器播放。
+// 使用 POST body 发送原始 PCM 数据，Content-Type: application/octet-stream
+void handleSpeak() {
+    if (playing) {
+        server.send(503, "application/json", "{\"error\":\"busy\"}");
+        return;
+    }
+    // 从请求体读取数据
+    String body = server.arg("plain");
+    if (body.length() == 0) {
+        server.send(400, "application/json", "{\"error\":\"no audio data\"}");
+        return;
+    }
+    int payloadLen = body.length();
+    Serial.printf("[SPK] 收到音频 %d bytes，开始播放...\n", payloadLen);
+
+    // 播放
+    playing = true;
+    const uint8_t* data = (const uint8_t*)body.c_str();
+    size_t written = 0;
+    size_t offset = 0;
+    while (offset < (size_t)payloadLen) {
+        size_t chunk = min((size_t)512, (size_t)payloadLen - offset);
+        i2s_write(I2S_SPK_PORT, data + offset, chunk, &written, 100);
+        offset += written;
+    }
+    playing = false;
+    Serial.printf("[SPK] 播放完成，%d bytes\n", payloadLen);
+    server.send(200, "application/json", "{\"status\":\"played\",\"bytes\":" + String(payloadLen) + "}");
+}
+
 // ── Wi-Fi 连接 ────────────────────────────────────────────
 void wifiConnect() {
     IPAddress localIP(192, 168, 50, 99);
@@ -230,6 +262,7 @@ void setup() {
 
     server.on("/status", handleStatus);
     server.on("/record", HTTP_POST, handleRecord);
+    server.on("/speak", HTTP_POST, handleSpeak);
     server.begin();
     Serial.println("[HTTP] 服务器启动");
     Serial.println("[READY] 按 BOOT 键开始录音");
