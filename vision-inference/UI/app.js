@@ -1521,7 +1521,7 @@ async function loadDeviceList() {
       }
       // Capability column (multi-select, comma-separated)
       const tdCap = document.createElement('td');
-      const capMap = {video_in:['视频','#3b82f6'], audio_in:['音频','#22c55e'], sensor:['传感器','#f97316']};
+      const capMap = {video_in:['视频','#3b82f6'], audio_in:['麦克风','#22c55e'], audio_out:['扬声器','#f59e0b'], sensor:['传感器','#f97316']};
       const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',').map(s => s.trim()).filter(Boolean);
       tdCap.innerHTML = caps.map(c => {
         const [label, color] = capMap[c] || [c, '#6b7280'];
@@ -2185,33 +2185,98 @@ document.addEventListener('DOMContentLoaded', () => {
   if (apiInput) apiInput.value = API;
 });
 
-// ── Listen 页面 ─────────────────────────────────────────────
+// ── Listen / Audio 页面 ─────────────────────────────────────
 let listenDevice = '';
 
 async function loadListenDevices() {
+  // 加载设备列表（用于录音选择）
   const sel = document.getElementById('listen-device');
-  if (!sel) return;
+  if (sel) {
+    try {
+      const r = await fetch(API + '/devices');
+      const data = await r.json();
+      const devices = data.devices || [];
+      const audioDevices = devices.filter(d => {
+        const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',');
+        return caps.includes('audio_in') || caps.includes('audio_out');
+      });
+      sel.innerHTML = '';
+      if (audioDevices.length === 0) {
+        sel.innerHTML = '<option value="">无音频设备</option>';
+      } else {
+        audioDevices.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.ip;
+          opt.textContent = `${d.name || d.ip} (${d.ip})`;
+          sel.appendChild(opt);
+        });
+        listenDevice = audioDevices[0].ip;
+      }
+    } catch { sel.innerHTML = '<option value="">加载失败</option>'; }
+  }
+
+  // 加载设备能力配置
+  const listEl = document.getElementById('audio-device-list');
+  if (listEl) {
+    try {
+      const r = await fetch(API + '/devices');
+      const data = await r.json();
+      const devices = data.devices || [];
+      if (!devices.length) {
+        listEl.innerHTML = '<p style="color:var(--text3);font-size:12px">无注册设备</p>';
+        return;
+      }
+      listEl.innerHTML = '';
+      devices.forEach(d => {
+        const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',');
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px';
+        row.innerHTML = `
+          <div style="min-width:120px;font-weight:600">${esc(d.name)}</div>
+          <div style="min-width:100px;color:var(--text3)">${esc(d.ip || '-')}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+              <input type="checkbox" name="cap-${d.mac.replace(/:/g,'_')}" value="video_in" ${caps.includes('video_in')?'checked':''} onchange="updateDeviceCapability('${d.mac}',this.value,this.checked)">
+              视频
+            </label>
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+              <input type="checkbox" name="cap-${d.mac.replace(/:/g,'_')}" value="audio_in" ${caps.includes('audio_in')?'checked':''} onchange="updateDeviceCapability('${d.mac}',this.value,this.checked)">
+              麦克风
+            </label>
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+              <input type="checkbox" name="cap-${d.mac.replace(/:/g,'_')}" value="audio_out" ${caps.includes('audio_out')?'checked':''} onchange="updateDeviceCapability('${d.mac}',this.value,this.checked)">
+              扬声器
+            </label>
+            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
+              <input type="checkbox" name="cap-${d.mac.replace(/:/g,'_')}" value="sensor" ${caps.includes('sensor')?'checked':''} onchange="updateDeviceCapability('${d.mac}',this.value,this.checked)">
+              传感器
+            </label>
+          </div>
+        `;
+        listEl.appendChild(row);
+      });
+    } catch { listEl.innerHTML = '<p style="color:var(--red);font-size:12px">加载失败</p>'; }
+  }
+}
+
+async function updateDeviceCapability(mac, value, checked) {
+  // 获取当前所有选中的能力
+  const checkboxes = document.querySelectorAll(`input[name="cap-${mac.replace(/:/g,'_')}"]`);
+  const caps = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+  const capStr = caps.join(',') || 'video_in';
   try {
-    const r = await fetch(API + '/devices');
-    const data = await r.json();
-    const devices = data.devices || [];
-    const audioDevices = devices.filter(d => {
-      const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',');
-      return caps.includes('audio_in');
+    const r = await fetch(API + '/devices/' + encodeURIComponent(mac), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ capability: capStr }),
     });
-    sel.innerHTML = '';
-    if (audioDevices.length === 0) {
-      sel.innerHTML = '<option value="">无音频设备</option>';
-      return;
+    if (r.ok) {
+      toast(`${mac} 能力已更新: ${capStr}`, 'ok');
+      loadListenDevices(); // 刷新列表
+    } else {
+      toast('更新失败', 'err');
     }
-    audioDevices.forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = d.ip;
-      opt.textContent = `${d.name || d.ip} (${d.ip})`;
-      sel.appendChild(opt);
-    });
-    listenDevice = audioDevices[0].ip;
-  } catch { sel.innerHTML = '<option value="">加载失败</option>'; }
+  } catch { toast('更新失败', 'err'); }
 }
 
 async function startListen() {
