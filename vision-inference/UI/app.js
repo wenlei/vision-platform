@@ -2376,9 +2376,17 @@ async function startListen() {
   const statusEl = document.getElementById('listen-status');
   const logEl = document.getElementById('listen-log');
   const playerEl = document.getElementById('listen-player');
+  const waveContainer = document.getElementById('waveform-container');
+  const waveCanvas = document.getElementById('waveform-canvas');
+  const waveLevel = document.getElementById('waveform-level');
+  const waveInfo = document.getElementById('waveform-info');
   const deviceIp = document.getElementById('listen-device').value;
   if (!deviceIp) { toast('请先选择音频设备', 'err'); return; }
 
+  // 显示波形容器
+  waveContainer.style.display = '';
+  waveInfo.textContent = '🔴 录音中...';
+  waveLevel.textContent = '音量: 录音中';
   statusEl.textContent = '录音中... (5秒)';
   statusEl.style.color = 'var(--blue)';
   listenLog(logEl, `触发录音: ${deviceIp}`);
@@ -2395,44 +2403,148 @@ async function startListen() {
     const d = await r.json();
     if (d.status === 'recording_started') {
       listenLog(logEl, '录音已启动，等待5秒...');
+      waveInfo.textContent = '🔴 录音中... (5秒)';
 
       // 等待录音+上传+处理完成
       await new Promise(resolve => setTimeout(resolve, 8000));
 
       // 获取音频响应
       statusEl.textContent = '获取音频...';
+      waveInfo.textContent = '📥 下载音频中...';
       const audioR = await fetch(`${API}/audio/infer`, {
         method: 'POST',
-        headers: { 'Content-Type': 'audio/pcm', 'X-Sample-Rate': '16000', 'X-Device': 'desk-cam-03' },
+        headers: { 'Content-Type': 'audio/pcm', 'X-Sample-Rate': '16000', 'X-Device': dev.mac },
         body: new ArrayBuffer(16000),
         signal: AbortSignal.timeout(10000),
       });
 
       if (audioR.ok) {
         const audioData = await audioR.arrayBuffer();
-        const audioBlob = new Blob([audioData], { type: 'audio/pcm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
+        const sampleRate = 16000;
+        const numChannels = 1;
+        const bitsPerSample = 16;
+        const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+        const blockAlign = numChannels * bitsPerSample / 8;
+        const dataSize = audioData.byteLength;
 
-        playerEl.innerHTML = `
-          <audio controls style="width:100%;height:40px" src="${audioUrl}"></audio>
-          <p style="font-size:11px;color:var(--text3);margin-top:6px">采样率: 16000Hz · 时长: ${(audioData.byteLength/16000/2).toFixed(1)}s</p>
-        `;
-        statusEl.textContent = '音频就绪 ✅';
+        // 构建 WAV 文件头
+        const header = new ArrayBuffer(44);
+        const view = new DataView(header);
+        const writeString = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + dataSize, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitsPerSample, true);
+        writeString(36, 'data');
+        view.setUint32(40, dataSize, true);
+
+        // 合并 WAV 头 + PCM 数据
+        const wavBlob = new Blob([header, audioData], { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(wavBlob);
+
+        // 绘制波形
+        drawWaveform(waveCanvas, audioData, sampleRate);
+        const duration = (dataSize / byteRate).toFixed(1);
+        waveInfo.textContent = `✅ 音频就绪 · ${duration}s · ${(audioData.byteLength/1024).toFixed(1)}KB`;
+        waveLevel.textContent = '音量: 已收到';
+
+        // 播放音频
+        const audio = new Audio(audioUrl);
+        playerEl.innerHTML = '';
+        playerEl.appendChild(audio);
+        audio.controls = true;
+        audio.style.width = '100%';
+        audio.style.height = '40px';
+        audio.play();
+
+        statusEl.textContent = '播放中...';
         statusEl.style.color = 'var(--green)';
-        listenLog(logEl, `收到音频 ${(audioData.byteLength/1024).toFixed(1)}KB`);
+        listenLog(logEl, `收到音频 ${(audioData.byteLength/1024).toFixed(1)}KB, ${duration}s`);
+
+        // 播放完成后更新状态
+        audio.onended = () => {
+          statusEl.textContent = '播放完成 ✅';
+          statusEl.style.color = 'var(--green)';
+          waveInfo.textContent = `✅ 播放完成 · ${duration}s`;
+        };
       } else {
         statusEl.textContent = '获取失败';
         statusEl.style.color = 'var(--red)';
+        waveInfo.textContent = '❌ 获取失败';
       }
     } else {
       statusEl.textContent = d.error || '录音失败';
       statusEl.style.color = 'var(--red)';
+      waveInfo.textContent = '❌ 录音失败';
     }
   } catch (e) {
     statusEl.textContent = '请求失败: ' + e.message;
     statusEl.style.color = 'var(--red)';
     listenLog(logEl, '错误: ' + e.message);
+    waveInfo.textContent = '❌ 错误: ' + e.message;
   }
+}
+
+// 绘制波形图
+function drawWaveform(canvas, pcmData, sampleRate) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+  const data = new Int16Array(pcmData);
+
+  // 清空画布
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, width, height);
+
+  // 计算每个柱子的宽度
+  const barCount = 100;
+  const barWidth = width / barCount;
+  const samplesPerBar = Math.floor(data.length / barCount);
+
+  // 找到最大值用于归一化
+  let maxVal = 0;
+  for (let i = 0; i < data.length; i++) {
+    const abs = Math.abs(data[i]);
+    if (abs > maxVal) maxVal = abs;
+  }
+  if (maxVal === 0) maxVal = 1;
+
+  // 绘制柱状图
+  for (let i = 0; i < barCount; i++) {
+    let sum = 0;
+    for (let j = 0; j < samplesPerBar; j++) {
+      sum += Math.abs(data[i * samplesPerBar + j]);
+    }
+    const avg = sum / samplesPerBar;
+    const barHeight = (avg / maxVal) * (height - 10);
+
+    // 渐变颜色：中间高（蓝），两边低（灰）
+    const hue = 220 + (i / barCount) * 40;
+    const lightness = 40 + (barHeight / (height - 10)) * 30;
+    ctx.fillStyle = `hsl(${hue}, 80%, ${lightness}%)`;
+    ctx.fillRect(
+      i * barWidth + 1,
+      height / 2 - barHeight / 2,
+      barWidth - 2,
+      barHeight
+    );
+  }
+
+  // 绘制中心线
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, height / 2);
+  ctx.lineTo(width, height / 2);
+  ctx.stroke();
 }
 
 function listenLog(logEl, msg) {

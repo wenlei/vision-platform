@@ -481,8 +481,17 @@
           <select id="listen-device" style="width:200px;height:36px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px">
             <option value="">加载中...</option>
           </select>
-          <button class="btn" onclick="startListen()" style="padding:6px 16px">🎤 录音 5s</button>
+          <button class="btn" onclick="startListen()" id="btn-record" style="padding:6px 16px">🎤 录音 5s</button>
           <span id="listen-status" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+        <!-- 波形可视化 -->
+        <div id="waveform-container" style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:10px;display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--text3)">📊 录音波形</span>
+            <span id="waveform-level" style="font-size:11px;color:var(--text3)">音量: ---</span>
+          </div>
+          <canvas id="waveform-canvas" width="500" height="80" style="width:100%;height:80px;border-radius:4px;background:var(--bg2)"></canvas>
+          <div id="waveform-info" style="font-size:10px;color:var(--text3);margin-top:4px;text-align:center">等待录音...</div>
         </div>
         <div id="listen-player" style="padding:8px 0">
           <p style="color:var(--text3);font-size:12px">暂无录音。点击"录音"按钮后音频将在此播放。</p>
