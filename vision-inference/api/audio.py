@@ -33,32 +33,30 @@ def generate_tone(freq=440, duration=0.5, sample_rate=16000):
 async def audio_infer(request: Request):
     """
     接收 ESP32 上传的 PCM 音频（16kHz 16-bit 单声道），
-    当前返回测试音用于验证扬声器硬件是否正常。
+    原样返回（echo 测试）用于验证录音和扬声器是否正常工作。
     后续可接入 STT + LLM + TTS 实现语音交互。
     """
-    # 读取请求头信息
     sample_rate = int(request.headers.get("X-Sample-Rate", "16000"))
     device = request.headers.get("X-Device", "unknown")
 
-    # 读取 PCM 音频数据
     body = await request.body()
     audio_len = len(body)
-    duration_sec = audio_len / (sample_rate * 2)  # 16-bit = 2 bytes/sample
+    duration_sec = audio_len / (sample_rate * 2)
 
     log.info(f"收到音频: device={device}, {audio_len} bytes, {duration_sec:.1f}s, {sample_rate}Hz")
 
-    # 当前行为：返回测试音验证扬声器
-    # 后续可替换为：STT → LLM → TTS → 返回语音
-    response_pcm = generate_tone(freq=440, duration=0.5, sample_rate=sample_rate)
+    # Echo 模式：原样返回录制的音频，同时发送到浏览器播放
+    # 这样用户可以通过浏览器听到自己说的话（验证麦克风正常）
+    # 同时 ESP32 也会播放（验证扬声器正常）
 
     return Response(
-        content=response_pcm,
+        content=body,
         media_type="audio/pcm",
         headers={
             "X-Sample-Rate": str(sample_rate),
             "X-Bits-Per-Sample": "16",
             "X-Channels": "1",
-            "X-Response-Duration": "0.5",
+            "X-Echo": "true",
         },
     )
 
