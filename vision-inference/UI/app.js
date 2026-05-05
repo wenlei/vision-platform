@@ -2556,3 +2556,179 @@ function listenLog(logEl, msg) {
   logEl.appendChild(div);
   logEl.scrollTop = logEl.scrollHeight;
 }
+
+// ── 浏览器麦克风录音 ──────────────────────────────────────
+async function startBrowserMic() {
+  const statusEl = document.getElementById('listen-status');
+  const logEl = document.getElementById('listen-log');
+  const playerEl = document.getElementById('listen-player');
+  const waveContainer = document.getElementById('waveform-container');
+  const waveCanvas = document.getElementById('waveform-canvas');
+  const waveLevel = document.getElementById('waveform-level');
+  const waveInfo = document.getElementById('waveform-info');
+
+  statusEl.textContent = '请求麦克风权限...';
+  statusEl.style.color = 'var(--blue)';
+  listenLog(logEl, '请求浏览器麦克风权限...');
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    // 显示波形
+    waveContainer.style.display = '';
+    waveInfo.textContent = '🔴 浏览器录音中...';
+    statusEl.textContent = '录音中... (5秒)';
+    statusEl.style.color = 'var(--blue)';
+    listenLog(logEl, '浏览器录音开始，5秒...');
+
+    // 实时绘制波形
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    const ctx = waveCanvas.getContext('2d');
+    let animFrame;
+
+    function drawWave() {
+      analyser.getByteFrequencyData(dataArray);
+      const width = waveCanvas.width;
+      const height = waveCanvas.height;
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(0, 0, width, height);
+
+      const barCount = 64;
+      const barWidth = width / barCount;
+      const step = Math.floor(bufferLength / barCount);
+
+      let maxVal = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        if (dataArray[i] > maxVal) maxVal = dataArray[i];
+      }
+      waveLevel.textContent = `音量: ${maxVal}`;
+
+      for (let i = 0; i < barCount; i++) {
+        const val = dataArray[i * step];
+        const barHeight = (val / 255) * (height - 10);
+        const hue = 120 + (val / 255) * 120; // 绿到黄
+        ctx.fillStyle = `hsl(${hue}, 80%, 50%)`;
+        ctx.fillRect(i * barWidth + 1, height / 2 - barHeight / 2, barWidth - 2, barHeight);
+      }
+
+      animFrame = requestAnimationFrame(drawWave);
+    }
+    drawWave();
+
+    // 录音 5 秒
+    const sampleRate = 16000;
+    const duration = 5;
+    const recordingBuffer = audioContext.createBuffer(1, sampleRate * duration, sampleRate);
+    const channelData = recordingBuffer.getChannelData(0);
+
+    // 使用 ScriptProcessorNode 采集（兼容性更好）
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    let writeIndex = 0;
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    await new Promise(resolve => {
+      processor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+        const remaining = channelData.length - writeIndex;
+        const toCopy = Math.min(input.length, remaining);
+        channelData.set(input.subarray(0, toCopy), writeIndex);
+        writeIndex += toCopy;
+      };
+      setTimeout(() => {
+        processor.disconnect();
+        source.disconnect();
+        cancelAnimationFrame(animFrame);
+        resolve();
+      }, duration * 1000);
+    });
+
+    stream.getTracks().forEach(t => t.stop());
+    audioContext.close();
+
+    waveInfo.textContent = '📥 处理音频...';
+    waveLevel.textContent = '音量: 录音完成';
+
+    // 转为 16-bit PCM
+    const pcm16 = new Int16Array(channelData.length);
+    for (let i = 0; i < channelData.length; i++) {
+      const s = Math.max(-1, Math.min(1, channelData[i]));
+      pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+
+    // 发送到服务器
+    listenLog(logEl, `发送 ${pcm16.byteLength} 字节到服务器...`);
+    statusEl.textContent = '发送到服务器...';
+
+    const r = await fetch(`${API}/audio/infer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'audio/pcm', 'X-Sample-Rate': '16000', 'X-Device': 'browser-mic' },
+      body: pcm16.buffer,
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (r.ok) {
+      const audioData = await r.arrayBuffer();
+      const sampleRate = 16000;
+      const numChannels = 1;
+      const bitsPerSample = 16;
+      const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+      const dataSize = audioData.byteLength;
+
+      // 构建 WAV 文件头
+      const header = new ArrayBuffer(44);
+      const view = new DataView(header);
+      const writeString = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + dataSize, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, numChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, byteRate, true);
+      view.setUint16(32, numChannels * bitsPerSample / 8, true);
+      view.setUint16(34, bitsPerSample, true);
+      writeString(36, 'data');
+      view.setUint32(40, dataSize, true);
+
+      const wavBlob = new Blob([header, audioData], { type: 'audio/wav' });
+      const audioUrl = URL.createObjectURL(wavBlob);
+
+      // 绘制返回音频波形
+      drawWaveform(waveCanvas, audioData, sampleRate);
+      waveInfo.textContent = `✅ 收到回声 ${(dataSize/1024).toFixed(1)}KB`;
+
+      const audio = new Audio(audioUrl);
+      playerEl.innerHTML = '';
+      playerEl.appendChild(audio);
+      audio.controls = true;
+      audio.style.width = '100%';
+      audio.style.height = '40px';
+      audio.play();
+
+      statusEl.textContent = '回声播放中 ✅';
+      statusEl.style.color = 'var(--green)';
+      listenLog(logEl, `收到回声 ${(audioData.byteLength/1024).toFixed(1)}KB，应能听到自己说话`);
+
+      audio.onended = () => {
+        statusEl.textContent = '完成 ✅';
+        waveInfo.textContent = '✅ 回声播放完成';
+      };
+    } else {
+      statusEl.textContent = '服务器错误';
+      statusEl.style.color = 'var(--red)';
+    }
+  } catch (e) {
+    statusEl.textContent = '错误: ' + e.message;
+    statusEl.style.color = 'var(--red)';
+    listenLog(logEl, '错误: ' + e.message);
+  }
+}
