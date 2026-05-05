@@ -2384,7 +2384,14 @@ async function startListen() {
   listenLog(logEl, `触发录音: ${deviceIp}`);
 
   try {
-    const r = await fetch(`http://${deviceIp}/record`, { method: 'POST', signal: AbortSignal.timeout(30000) });
+    // 查找设备 MAC
+    const devices = (await (await fetch(API + '/devices')).json()).devices || [];
+    const dev = devices.find(d => d.ip === deviceIp);
+    if (!dev) { statusEl.textContent = '设备未注册'; statusEl.style.color = 'var(--red)'; return; }
+
+    const r = await fetch(API + '/devices/' + encodeURIComponent(dev.mac) + '/record', {
+      method: 'POST', signal: AbortSignal.timeout(40000),
+    });
     const d = await r.json();
     if (d.status === 'recording_started') {
       listenLog(logEl, '录音已启动，等待5秒...');

@@ -372,3 +372,29 @@ def delete_device(mac: str):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"DB error: {e}")
     return {"ok": True, "deleted": row[0]}
+
+
+@router.post("/{mac}/record")
+async def proxy_record(mac: str):
+    """代理触发 ESP32 录音：通过后端转发 /record 请求到设备，避免浏览器 CORS 问题。"""
+    try:
+        with get_conn() as (conn, cur):
+            cur.execute("SELECT ip, name FROM devices WHERE mac = %s", (mac.upper(),))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail=f"Device {mac} not found")
+            ip, name = row
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"DB error: {e}")
+
+    if not ip:
+        raise HTTPException(status_code=422, detail=f"Device {name} has no IP")
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(35.0)) as client:
+            r = await client.post(f"http://{ip}/record")
+            return r.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Cannot reach {name} ({ip}): {e}")
