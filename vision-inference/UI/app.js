@@ -2405,16 +2405,15 @@ async function startListen() {
       listenLog(logEl, '录音已启动，等待5秒...');
       waveInfo.textContent = '🔴 录音中... (5秒)';
 
-      // 等待录音+上传+处理完成
+      // 等待录音+上传完成
       await new Promise(resolve => setTimeout(resolve, 8000));
 
-      // 获取音频响应
-      statusEl.textContent = '获取音频...';
-      waveInfo.textContent = '📥 下载音频中...';
-      const audioR = await fetch(`${API}/audio/infer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'audio/pcm', 'X-Sample-Rate': '16000', 'X-Device': dev.mac },
-        body: new ArrayBuffer(16000),
+      // 从服务器获取 ESP32 的录音
+      statusEl.textContent = '获取录音...';
+      waveInfo.textContent = '📥 从服务器获取录音...';
+      listenLog(logEl, '从服务器获取 ESP32 录音...');
+
+      const audioR = await fetch(`${API}/audio/latest?device=${encodeURIComponent(dev.mac)}`, {
         signal: AbortSignal.timeout(10000),
       });
 

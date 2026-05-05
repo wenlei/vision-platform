@@ -2,12 +2,16 @@
 audio.py -- 音频处理 API
 
 路由：
-  POST /audio/infer — 接收 ESP32 上传的 PCM 音频，处理后返回音频响应
+  POST /audio/infer    — 接收 ESP32/浏览器上传的 PCM 音频，存储并返回
+  GET  /audio/latest   — 获取指定设备的最新录音
+  POST /speak          — 向 ESP32 推送音频
 """
 
 import io
 import struct
+import time
 import logging
+import threading
 import numpy as np
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
@@ -15,16 +19,19 @@ from fastapi.responses import Response
 log = logging.getLogger(__name__)
 router = APIRouter()
 
+# ── 音频缓存 ──────────────────────────────────────────────
+# 按设备存储最近一次录音的 PCM 数据，供浏览器获取
+_audio_cache: dict[str, dict] = {}  # {device: {data, timestamp, sample_rate}}
+_cache_lock = threading.Lock()
+
 
 def generate_tone(freq=440, duration=0.5, sample_rate=16000):
     """生成简单的正弦波测试音，用于验证扬声器是否正常工作。"""
     t = np.linspace(0, duration, int(sample_rate * duration), dtype=np.float32)
-    # 正弦波 + 淡入淡出（避免爆音）
     tone = np.sin(2 * np.pi * freq * t) * 0.3
     fade_len = int(0.01 * sample_rate)
     tone[:fade_len] *= np.linspace(0, 1, fade_len)
     tone[-fade_len:] *= np.linspace(1, 0, fade_len)
-    # 转为 16-bit PCM
     pcm = (tone * 32767).astype(np.int16).tobytes()
     return pcm
 
@@ -32,9 +39,8 @@ def generate_tone(freq=440, duration=0.5, sample_rate=16000):
 @router.post("/audio/infer")
 async def audio_infer(request: Request):
     """
-    接收 ESP32 上传的 PCM 音频（16kHz 16-bit 单声道），
-    原样返回（echo 测试）用于验证录音和扬声器是否正常工作。
-    后续可接入 STT + LLM + TTS 实现语音交互。
+    接收 PCM 音频（16kHz 16-bit 单声道），存储并返回 echo。
+    浏览器可通过 GET /audio/latest 获取存储的录音。
     """
     sample_rate = int(request.headers.get("X-Sample-Rate", "16000"))
     device = request.headers.get("X-Device", "unknown")
@@ -45,9 +51,13 @@ async def audio_infer(request: Request):
 
     log.info(f"收到音频: device={device}, {audio_len} bytes, {duration_sec:.1f}s, {sample_rate}Hz")
 
-    # Echo 模式：原样返回录制的音频，同时发送到浏览器播放
-    # 这样用户可以通过浏览器听到自己说的话（验证麦克风正常）
-    # 同时 ESP32 也会播放（验证扬声器正常）
+    # 存储音频（供浏览器获取）
+    with _cache_lock:
+        _audio_cache[device] = {
+            "data": body,
+            "timestamp": time.time(),
+            "sample_rate": sample_rate,
+        }
 
     return Response(
         content=body,
@@ -59,6 +69,38 @@ async def audio_infer(request: Request):
             "X-Echo": "true",
         },
     )
+
+
+@router.get("/audio/latest")
+async def audio_latest(device: str = ""):
+    """获取指定设备的最新录音。device 为空时返回所有设备的录音列表。"""
+    with _cache_lock:
+        if device:
+            entry = _audio_cache.get(device)
+            if not entry:
+                return {"error": f"No audio for {device}"}
+            return Response(
+                content=entry["data"],
+                media_type="audio/pcm",
+                headers={
+                    "X-Sample-Rate": str(entry["sample_rate"]),
+                    "X-Bits-Per-Sample": "16",
+                    "X-Channels": "1",
+                    "X-Timestamp": str(int(entry["timestamp"])),
+                },
+            )
+        else:
+            return {
+                "devices": [
+                    {
+                        "device": d,
+                        "bytes": len(v["data"]),
+                        "duration": round(len(v["data"]) / (v["sample_rate"] * 2), 1),
+                        "timestamp": int(v["timestamp"]),
+                    }
+                    for d, v in _audio_cache.items()
+                ]
+            }
 
 
 @router.post("/speak")
