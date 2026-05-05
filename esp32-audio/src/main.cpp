@@ -125,7 +125,7 @@ void sendAudio(size_t len) {
     http.begin(url);
     http.addHeader("Content-Type", "audio/pcm");
     http.addHeader("X-Sample-Rate", String(SAMPLE_RATE));
-    http.addHeader("X-Device", "desk-cam-03");
+    http.addHeader("X-Device", "desk-audio-03");
 
     int code = http.POST((uint8_t*)audioBuf, len);
     Serial.printf("[NET] HTTP %d\n", code);
@@ -159,7 +159,7 @@ void sendAudio(size_t len) {
 // ── HTTP /status ──────────────────────────────────────────
 void handleStatus() {
     String json = "{";
-    json += "\"device\":\"desk-cam-03\",";
+    json += "\"device\":\"desk-audio-03\",";
     json += "\"platform\":\"desk-platform\",";
     json += "\"mac\":\"" + WiFi.macAddress() + "\",";
     json += "\"ip\":\"" + deviceIP + "\",";
