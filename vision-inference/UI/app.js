@@ -2183,7 +2183,58 @@ setupDropZone('item-drop-zone', 'item-file', 'item-preview');
 document.addEventListener('DOMContentLoaded', () => {
   const apiInput = document.getElementById('cfg-api');
   if (apiInput) apiInput.value = API;
+  initNavDrag();
 });
+
+// ── 侧边栏导航拖拽排序 ─────────────────────────────────────
+function initNavDrag() {
+  const container = document.querySelector('.nav-items');
+  if (!container) return;
+  const items = container.querySelectorAll('.nav-item');
+
+  // 从 localStorage 恢复顺序
+  const savedOrder = localStorage.getItem('nav_order');
+  if (savedOrder) {
+    const order = savedOrder.split(',');
+    order.forEach(page => {
+      const item = container.querySelector(`[data-page="${page}"]`);
+      if (item) container.appendChild(item);
+    });
+  }
+
+  items.forEach(item => {
+    item.addEventListener('dragstart', e => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', item.dataset.page);
+      item.classList.add('dragging');
+      item.style.opacity = '0.5';
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      item.style.opacity = '';
+      saveNavOrder(container);
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const dragging = container.querySelector('.dragging');
+      if (!dragging || dragging === item) return;
+      const rect = item.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (e.clientY < mid) {
+        container.insertBefore(dragging, item);
+      } else {
+        container.insertBefore(dragging, item.nextSibling);
+      }
+    });
+  });
+}
+
+function saveNavOrder(container) {
+  const order = Array.from(container.querySelectorAll('.nav-item'))
+    .map(el => el.dataset.page).join(',');
+  localStorage.setItem('nav_order', order);
+}
 
 // ── Listen / Audio 页面 ─────────────────────────────────────
 let listenDevice = '';
