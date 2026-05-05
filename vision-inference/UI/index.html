@@ -503,16 +503,26 @@
   <div class="page" id="page-api">
     <div class="page-header">
       <span class="page-title">🔗 API Bindings</span>
-      <button class="btn" onclick="loadApiBindings()">↺ 刷新</button>
+      <button class="btn" onclick="initApiPage()">↺ 刷新</button>
     </div>
     <div class="page-body">
+      <!-- 设备能力筛选 -->
+      <div class="card">
+        <div class="card-title">选择设备能力</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+          <select id="api-device-select" style="width:200px;height:36px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px" onchange="onApiDeviceChange()">
+            <option value="">选择设备...</option>
+          </select>
+          <span id="api-cap-display" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+      </div>
 
       <!-- API 文档 -->
       <div class="card">
         <div class="card-title">端点说明</div>
-        <div class="api-doc-grid">
+        <div class="api-doc-grid" id="api-docs-grid">
 
-          <div class="api-doc-row">
+          <div class="api-doc-row" data-cap="video_in">
             <div class="api-doc-sig">
               <span class="api-method post">POST</span>
               <span class="api-path">/detect/group/<em>{tag}</em></span>
@@ -520,7 +530,7 @@
             <div class="api-doc-desc">对该 Tag 下全部设备同时抓帧，运行 YOLO 目标检测 + CLIP 自定义物品匹配。返回每台设备的 bounding box、标签、置信度及标注图路径。</div>
           </div>
 
-          <div class="api-doc-row">
+          <div class="api-doc-row" data-cap="video_in">
             <div class="api-doc-sig">
               <span class="api-method post">POST</span>
               <span class="api-path">/describe/group/<em>{tag}</em></span>
@@ -528,7 +538,7 @@
             <div class="api-doc-desc">轻量版检测，不生成标注图。仅返回文字描述（如 "Detected: person, laptop"）和自定义物品匹配结果，适合轮询或文本通知场景。</div>
           </div>
 
-          <div class="api-doc-row">
+          <div class="api-doc-row" data-cap="video_in">
             <div class="api-doc-sig">
               <span class="api-method post">POST</span>
               <span class="api-path">/capture/group/<em>{tag}</em></span>
@@ -536,7 +546,7 @@
             <div class="api-doc-desc">仅抓帧保存，不做任何推理。返回各设备的图片存储路径，用于截图归档或后续离线分析。</div>
           </div>
 
-          <div class="api-doc-row">
+          <div class="api-doc-row" data-cap="video_in">
             <div class="api-doc-sig">
               <span class="api-method post">POST</span>
               <span class="api-path">/detect/<em>{name-or-mac}</em></span>
@@ -544,7 +554,7 @@
             <div class="api-doc-desc">对指定设备单独抓帧并完整检测，无需上传图片。支持设备名（推荐，如 <code>desk-cam-01</code>）或 MAC 地址，不区分大小写。适合脚本定时触发或外部服务针对某台摄像头的独立请求。</div>
           </div>
 
-          <div class="api-doc-row">
+          <div class="api-doc-row" data-cap="video_in">
             <div class="api-doc-sig">
               <span class="api-method post">POST</span>
               <span class="api-path">/detect</span>
@@ -553,7 +563,7 @@
             <div class="api-doc-desc">上传图片文件进行检测（form-data: <code>file</code>、可选 <code>camera_ip</code> / <code>device_mac</code>）。返回 detections 列表和标注图，适合 ESP32 直接 HTTP POST 原始帧。</div>
           </div>
 
-          <div class="api-doc-row">
+          <div class="api-doc-row" data-cap="video_in">
             <div class="api-doc-sig">
               <span class="api-method post">POST</span>
               <span class="api-path">/detect/all</span>
@@ -561,7 +571,7 @@
             <div class="api-doc-desc">对所有已注册设备（含 stream_url）同时抓帧并检测，不受 Tag 限制。适合一次性全局扫描。</div>
           </div>
 
-          <div class="api-doc-row">
+          <div class="api-doc-row" data-cap="video_in">
             <div class="api-doc-sig">
               <span class="api-method get">GET</span>
               <span class="api-path">/search</span>
@@ -569,13 +579,37 @@
             <div class="api-doc-desc">查询检测历史。支持参数：<code>?label=person</code>（按标签过滤）、<code>?limit=50</code>（条数）、<code>?device_mac=…</code>（按设备过滤）。</div>
           </div>
 
-          <div class="api-doc-row">
+          <div class="api-doc-row" data-cap="video_in">
             <div class="api-doc-sig">
               <span class="api-method post">POST</span>
               <span class="api-path">/face/identify</span>
               <span class="api-badge">upload</span>
             </div>
             <div class="api-doc-desc">人脸识别，上传图片（form-data: <code>file</code>），返回匹配姓名、置信度及是否触发自适应学习。</div>
+          </div>
+
+          <div class="api-doc-row" data-cap="audio_out">
+            <div class="api-doc-sig">
+              <span class="api-method post">POST</span>
+              <span class="api-path">/audio/infer</span>
+            </div>
+            <div class="api-doc-desc">接收 ESP32 上传的 PCM 音频（16kHz 16-bit），处理后返回音频响应。用于语音交互流程。</div>
+          </div>
+
+          <div class="api-doc-row" data-cap="audio_out">
+            <div class="api-doc-sig">
+              <span class="api-method post">POST</span>
+              <span class="api-path">/speak</span>
+            </div>
+            <div class="api-doc-desc">从后端主动向 ESP32 推送音频。请求体：PCM 二进制数据。需通过 X-Device 头指定目标设备。</div>
+          </div>
+
+          <div class="api-doc-row" data-cap="audio_in audio_out">
+            <div class="api-doc-sig">
+              <span class="api-method post">POST</span>
+              <span class="api-path">/record</span>
+            </div>
+            <div class="api-doc-desc">远程触发 ESP32 录音（5秒）。替代 BOOT 物理按键，录音完成后自动上传到 /audio/infer。</div>
           </div>
 
         </div>

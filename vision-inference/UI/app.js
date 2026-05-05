@@ -60,6 +60,7 @@ function onPageLoad(name) {
   if (name === 'items')   loadItems();
   if (name === 'faces')   loadFaces();
   if (name === 'devices') initDevices();
+  if (name === 'listen')  loadListenDevices();
   if (name === 'api')     initApiPage();
 }
 
@@ -1860,9 +1861,50 @@ function setDevStatus() {}
 // ══════════════════════════════════════════════════════════════
 async function initApiPage() {
   loadApiBindings();
-  // populate API address input
-  const inp = document.getElementById('cfg-api');
-  if (inp) inp.value = API;
+  loadApiDeviceSelect();
+}
+
+async function loadApiDeviceSelect() {
+  const sel = document.getElementById('api-device-select');
+  if (!sel) return;
+  try {
+    const r = await fetch(API + '/devices');
+    const data = await r.json();
+    const devices = data.devices || [];
+    sel.innerHTML = '<option value="">全部设备</option>';
+    devices.forEach(d => {
+      const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',');
+      const capStr = caps.join(',');
+      const opt = document.createElement('option');
+      opt.value = capStr;
+      opt.textContent = `${d.name} (${capStr})`;
+      sel.appendChild(opt);
+    });
+    onApiDeviceChange();
+  } catch {}
+}
+
+function onApiDeviceChange() {
+  const sel = document.getElementById('api-device-select');
+  const display = document.getElementById('api-cap-display');
+  if (!sel) return;
+  const capStr = sel.value;
+  const caps = capStr ? capStr.split(',') : [];
+
+  if (display) {
+    display.textContent = capStr ? `能力: ${caps.join(', ')}` : '显示全部端点';
+  }
+
+  // 筛选 API 文档行
+  document.querySelectorAll('.api-doc-row').forEach(row => {
+    const rowCap = row.dataset.cap || '';
+    if (!capStr) {
+      row.style.display = '';
+    } else {
+      const match = caps.some(c => rowCap.includes(c));
+      row.style.display = match ? '' : 'none';
+    }
+  });
 }
 
 async function loadApiBindings() {
