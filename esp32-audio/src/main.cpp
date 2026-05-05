@@ -26,9 +26,9 @@
 #define PIN_BUTTON      0       // BOOT 按键
 #define I2S_MIC_CLK     42      // PDM 麦克风时钟
 #define I2S_MIC_DATA    41      // PDM 麦克风数据
-#define I2S_SPK_BCLK    8       // MAX98357A BCLK
-#define I2S_SPK_LRC     7       // MAX98357A LRC
-#define I2S_SPK_DOUT    9       // MAX98357A DIN
+#define I2S_SPK_BCLK    2       // MAX98357A BCLK
+#define I2S_SPK_LRC     3       // MAX98357A LRC
+#define I2S_SPK_DOUT    1       // MAX98357A DIN
 
 // ── 音频参数 ──────────────────────────────────────────────
 #define SAMPLE_RATE     16000
