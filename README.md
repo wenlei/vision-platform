@@ -72,7 +72,7 @@ All `/detect` endpoints run YOLO + CLIP + InsightFace and log results to `vision
 | `DELETE` | `/devices/{mac}` | Remove device |
 | `PUT` | `/devices/{mac}/set-default` | Set as default device |
 | `GET` | `/devices/scan?ip=` | Scan single ESP32 by IP, returns info for registration pre-fill |
-| `GET` | `/devices/scan-subnet` | Scan full subnet for desk-vision devices (filters by platform marker) |
+| `GET` | `/devices/scan-subnet` | Scan full subnet for desk-platform devices (filters by platform marker) |
 | `GET` | `/devices/discovered` | Devices seen in vision_log in last 7 days |
 | `GET` | `/devices/ping?ip=` | Heartbeat check — RSSI, uptime, heap |
 | `GET` | `/devices/camstatus/{mac}` | Camera resolution, RSSI, uptime |
@@ -131,7 +131,7 @@ Single unified firmware for all XIAO ESP32-S3 Sense devices (`[env:cam]`). Uses 
 - `:80` — REST API (`/status`, `/capture`, `/config`, `/logs`, `/update`)
 - `:81` — MJPEG stream
 
-`/status` includes `"platform":"desk-vision"` so the backend subnet scanner can identify devices flashed with this firmware.
+`/status` includes `"platform":"desk-platform"` so the backend subnet scanner can identify devices flashed with this firmware.
 
 ## Quick Start
 
@@ -317,4 +317,46 @@ python3 .scripts/deploy.py pull
 
 # Upload + restart container
 python3 .scripts/deploy.py restart
+```
+
+## Audio Module (desk-cam-03)
+
+XIAO ESP32S3 Sense + MAX98357A I2S amplifier for voice interaction.
+
+**Wiring (direct plug-in, no jumper wires needed):**
+
+| MAX98357A | XIAO ESP32S3 Left Rail |
+|-----------|----------------------|
+| LRC       | D7 (GPIO7)           |
+| BCLK      | D8 (GPIO8)           |
+| DIN       | D9 (GPIO9)           |
+| GAIN      | D10 (floating)       |
+| SD        | 3V3                  |
+| GND       | GND                  |
+| VIN       | VUSB (5V)            |
+
+**Voice interaction pipeline (fully local):**
+```
+Button trigger
+→ ESP32 PDM mic (GPIO41/42) captures PCM
+→ Wi-Fi stream to Win (192.168.50.71)
+→ faster-whisper (speech recognition)
+→ Ollama local LLM (processing)
+→ Kokoro-82M TTS (audio generation)
+→ Return to ESP32
+→ MAX98357A playback
+```
+
+## Device Serial Numbers
+
+| Device     | Serial Number       |
+|------------|---------------------|
+| desk-cam-01 | E8:F6:0A:8C:F4:44  |
+| desk-cam-02 | 44:1B:F6:83:98:B8  |
+| desk-cam-03 | E0:72:A1:FB:4C:0C  |
+
+Use `.scripts/link-devices.py` to create stable symlinks under `~/dev/`:
+```bash
+python3 .scripts/link-devices.py        # create/update symlinks
+python3 .scripts/link-devices.py --list # check status
 ```
