@@ -2429,39 +2429,22 @@ async function startListen() {
       waveInfo.textContent = '🔴 录音中... (5秒)';
       waveContainer.style.display = '';
 
-      // 实时绘制频率响应动画
-      const ctx = waveCanvas.getContext('2d');
-      let recFrame = 0;
-      const recAnim = setInterval(() => {
-        recFrame++;
-        const width = waveCanvas.width;
-        const height = waveCanvas.height;
-        ctx.fillStyle = '#1a1a2e';
-        ctx.fillRect(0, 0, width, height);
-
-        // 模拟频率响应柱状图（低频→高频，从左到右）
-        const barCount = 40;
-        const barWidth = width / barCount;
-        for (let i = 0; i < barCount; i++) {
-          // 每个频段有不同的响应模式
-          const freq = i / barCount;
-          const base = Math.sin(freq * Math.PI) * 0.6;
-          const noise = Math.random() * 0.3;
-          const voice = Math.sin(recFrame * 0.08 + freq * 2) * 0.4;
-          const val = (base + noise + voice) * 0.5;
-          const barHeight = Math.max(1, val * (height * 0.8));
-          // 颜色：低频蓝 → 中频绿 → 高频红
-          const hue = 200 + freq * 160;
-          const lightness = 45 + val * 20;
-          ctx.fillStyle = `hsl(${hue}, 70%, ${lightness}%)`;
-          ctx.fillRect(i * barWidth + 0.5, height - barHeight - 2, barWidth - 1, barHeight);
+      // 录音倒计时（5→0，每秒更新）
+      let recSec = 5;
+      waveInfo.textContent = `🔴 录音中... ${recSec}s`;
+      const recTimer = setInterval(() => {
+        recSec--;
+        if (recSec <= 0) {
+          clearInterval(recTimer);
+          waveInfo.textContent = '📥 获取录音...';
+          return;
         }
-        waveLevel.textContent = `录音中... ${Math.min(5, Math.floor(recFrame / 10))}/5s`;
-      }, 80);
+        waveInfo.textContent = `🔴 录音中... ${recSec}s`;
+      }, 1000);
 
-      // 等待录音+上传完成
+      // 等待录音+上传完成（ESP32 录音5秒 + 上传时间）
       await new Promise(resolve => setTimeout(resolve, 8000));
-      clearInterval(recAnim);
+      clearInterval(recTimer);
 
       // 从服务器获取 ESP32 的录音
       statusEl.textContent = '获取录音...';
