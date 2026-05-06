@@ -2864,7 +2864,7 @@ async function startBrowserMic() {
   }
 }
 
-// ── 语音识别（服务端 faster-whisper）─────────────────────
+// ── 语音识别（服务端 faster-whisper，通过 ESP32 麦克风）─────────────────────
 let _speechActive = false;
 
 function toggleSpeech() {
@@ -2879,9 +2879,11 @@ async function startSpeech() {
   const btn = document.getElementById('btn-speech');
   const statusEl = document.getElementById('speech-status');
   const resultEl = document.getElementById('speech-result');
-  const interimEl = document.getElementById('speech-interim');
   const finalEl = document.getElementById('speech-final');
   const emptyEl = document.getElementById('speech-empty');
+
+  const deviceIp = document.getElementById('listen-device').value;
+  if (!deviceIp) { toast('请先选择音频设备', 'err'); return; }
 
   _speechActive = true;
   btn.textContent = '⏹ 停止识别';
@@ -2891,74 +2893,58 @@ async function startSpeech() {
   resultEl.style.display = '';
   emptyEl.style.display = 'none';
   finalEl.textContent = '';
-  interimEl.textContent = '录音中，请说话...';
 
-  // 使用电脑麦克风持续录音，每 3 秒发送一次识别
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioContext = new AudioContext({ sampleRate: 16000 });
-    const source = audioContext.createMediaStreamSource(stream);
-    const processor = audioContext.createScriptProcessor(4096, 1, 1);
-    const buffer = [];
-    source.connect(processor);
-    processor.connect(audioContext.destination);
+  // 循环：触发 ESP32 录音 → 发送到 /speech/recognize → 显示结果
+  while (_speechActive) {
+    try {
+      // 查找设备
+      const devices = (await (await fetch(API + '/devices')).json()).devices || [];
+      const dev = devices.find(d => d.ip === deviceIp);
+      if (!dev) { statusEl.textContent = '设备未注册'; break; }
 
-    // 每 3 秒发送一次音频进行识别
-    const sendInterval = setInterval(async () => {
-      if (!_speechActive || buffer.length === 0) return;
+      // 触发 ESP32 录音（5秒）
+      statusEl.textContent = '🔴 录音中...';
+      const recordR = await fetch(API + '/devices/' + encodeURIComponent(dev.mac) + '/record', {
+        method: 'POST',
+        signal: AbortSignal.timeout(40000),
+      });
+      const recordData = await recordR.json();
+      if (recordData.status !== 'recording_started') { break; }
 
-      // 从 buffer 中取出音频数据
-      const audioData = new Float32Array(buffer.splice(0));
-      // 转为 16-bit PCM
-      const pcm16 = new Int16Array(audioData.length);
-      for (let i = 0; i < audioData.length; i++) {
-        const s = Math.max(-1, Math.min(1, audioData[i]));
-        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      }
+      // 等待录音完成
+      await new Promise(resolve => setTimeout(resolve, 8000));
 
-      try {
-        const r = await fetch(`${API}/speech/recognize`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'audio/pcm', 'X-Sample-Rate': '16000', 'X-Device': 'browser' },
-          body: pcm16.buffer,
-          signal: AbortSignal.timeout(10000),
-        });
-        if (r.ok) {
-          const result = await r.json();
-          if (result.text) {
-            finalEl.textContent += result.text + ' ';
-            resultEl.scrollTop = resultEl.scrollHeight;
-            statusEl.textContent = `识别中... (${finalEl.textContent.length}字)`;
-          }
+      // 获取录音数据
+      statusEl.textContent = '🗣️ 识别中...';
+      const audioR = await fetch(`${API}/audio/latest?device=${encodeURIComponent(dev.name)}`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!audioR.ok) continue;
+
+      const audioData = await audioR.arrayBuffer();
+
+      // 发送到语音识别
+      const speechR = await fetch(`${API}/speech/recognize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/pcm', 'X-Sample-Rate': '16000', 'X-Device': dev.name },
+        body: audioData,
+        signal: AbortSignal.timeout(30000),
+      });
+
+      if (speechR.ok) {
+        const result = await speechR.json();
+        if (result.text && result.text.trim()) {
+          finalEl.textContent += result.text.trim() + '\n';
+          resultEl.scrollTop = resultEl.scrollHeight;
         }
-      } catch (e) {
-        // 网络错误，忽略继续
+        statusEl.textContent = `识别中... (已识别${finalEl.textContent.length}字)`;
+        statusEl.style.color = 'var(--blue)';
       }
-    }, 3000);
-
-    // 采集音频数据
-    processor.onaudioprocess = (e) => {
-      if (!_speechActive) return;
-      const input = e.inputBuffer.getChannelData(0);
-      buffer.push(...input);
-      // 限制 buffer 大小（最多 10 秒）
-      if (buffer.length > 160000) buffer.splice(0, 32000);
-    };
-
-    statusEl.textContent = '🔴 识别中...';
-
-    // 保存引用以便停止
-    window._speechStream = stream;
-    window._speechProcessor = processor;
-    window._speechAudioContext = audioContext;
-    window._speechSendInterval = sendInterval;
-
-  } catch (e) {
-    statusEl.textContent = '错误: ' + e.message;
-    statusEl.style.color = 'var(--red)';
-    _speechActive = false;
-    btn.textContent = '🎙️ 开始识别';
-    btn.style.background = '';
+    } catch (e) {
+      if (!_speechActive) break;
+      statusEl.textContent = '等待重试...';
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
   }
 }
 
@@ -2966,24 +2952,6 @@ function stopSpeech() {
   const btn = document.getElementById('btn-speech');
   const statusEl = document.getElementById('speech-status');
   _speechActive = false;
-
-  if (window._speechStream) {
-    window._speechStream.getTracks().forEach(t => t.stop());
-    window._speechStream = null;
-  }
-  if (window._speechProcessor) {
-    window._speechProcessor.disconnect();
-    window._speechProcessor = null;
-  }
-  if (window._speechAudioContext) {
-    window._speechAudioContext.close();
-    window._speechAudioContext = null;
-  }
-  if (window._speechSendInterval) {
-    clearInterval(window._speechSendInterval);
-    window._speechSendInterval = null;
-  }
-
   btn.textContent = '🎙️ 开始识别';
   btn.style.background = '';
   statusEl.textContent = '已停止';
