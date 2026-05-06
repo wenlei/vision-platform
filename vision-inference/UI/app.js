@@ -2863,3 +2863,95 @@ async function startBrowserMic() {
     listenLog(logEl, '错误: ' + e.message);
   }
 }
+
+// ── 语音识别（Web Speech API）────────────────────────────
+let _speechRecognition = null;
+let _speechActive = false;
+
+function toggleSpeech() {
+  if (_speechActive) {
+    stopSpeech();
+  } else {
+    startSpeech();
+  }
+}
+
+function startSpeech() {
+  const btn = document.getElementById('btn-speech');
+  const statusEl = document.getElementById('speech-status');
+  const resultEl = document.getElementById('speech-result');
+  const interimEl = document.getElementById('speech-interim');
+  const finalEl = document.getElementById('speech-final');
+  const emptyEl = document.getElementById('speech-empty');
+
+  // 检查浏览器支持
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    statusEl.textContent = '浏览器不支持语音识别（仅 Chrome/Edge）';
+    statusEl.style.color = 'var(--red)';
+    return;
+  }
+
+  _speechRecognition = new SpeechRecognition();
+  _speechRecognition.continuous = true;
+  _speechRecognition.interimResults = true;
+  _speechRecognition.lang = 'zh-CN';
+
+  _speechRecognition.onstart = () => {
+    _speechActive = true;
+    btn.textContent = '⏹ 停止识别';
+    btn.style.background = 'var(--red)';
+    statusEl.textContent = '🔴 识别中...';
+    statusEl.style.color = 'var(--blue)';
+    resultEl.style.display = '';
+    emptyEl.style.display = 'none';
+    finalEl.textContent = '';
+    interimEl.textContent = '等待语音...';
+  };
+
+  _speechRecognition.onresult = (event) => {
+    let interimText = '';
+    let finalText = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        finalText += transcript + ' ';
+      } else {
+        interimText += transcript;
+      }
+    }
+    finalEl.textContent += finalText;
+    interimEl.textContent = interimText;
+    resultEl.scrollTop = resultEl.scrollHeight;
+  };
+
+  _speechRecognition.onend = () => {
+    // 如果还在活跃状态，自动重启（continuous 模式可能中断）
+    if (_speechActive) {
+      try { _speechRecognition.start(); } catch (e) {}
+    }
+  };
+
+  _speechRecognition.onerror = (event) => {
+    if (event.error !== 'no-speech' && event.error !== 'aborted') {
+      statusEl.textContent = '识别错误: ' + event.error;
+      statusEl.style.color = 'var(--red)';
+    }
+  };
+
+  _speechRecognition.start();
+}
+
+function stopSpeech() {
+  const btn = document.getElementById('btn-speech');
+  const statusEl = document.getElementById('speech-status');
+  _speechActive = false;
+  if (_speechRecognition) {
+    _speechRecognition.stop();
+    _speechRecognition = null;
+  }
+  btn.textContent = '🎙️ 开始识别';
+  btn.style.background = '';
+  statusEl.textContent = '已停止';
+  statusEl.style.color = 'var(--text3)';
+}

@@ -509,6 +509,20 @@
         <p id="listen-player-empty" style="color:var(--text3);font-size:11px">暂无录音。点击"录音"按钮后音频将在此播放。</p>
       </div>
 
+      <!-- 语音识别 -->
+      <div class="card" style="margin-top:12px">
+        <div class="card-title">🎤 语音识别</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <button class="btn" id="btn-speech" onclick="toggleSpeech()" style="padding:5px 14px;font-size:11px">🎙️ 开始识别</button>
+          <span id="speech-status" style="font-size:11px;color:var(--text3)">未启动</span>
+        </div>
+        <div id="speech-result" style="background:var(--bg2);border-radius:6px;padding:10px;min-height:40px;font-size:13px;color:var(--text);white-space:pre-wrap;display:none">
+          <span id="speech-interim" style="color:var(--text3);font-style:italic"></span>
+          <span id="speech-final"></span>
+        </div>
+        <p id="speech-empty" style="color:var(--text3);font-size:11px">点击"开始识别"后，对着麦克风说话即可实时转写。</p>
+      </div>
+
       <!-- 音频日志 -->
       <div class="card" style="margin-top:12px">
         <div class="card-title">日志</div>
