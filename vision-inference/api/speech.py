@@ -28,11 +28,11 @@ def _load_whisper():
 
     log.info("加载 faster-whisper 模型...")
     from faster_whisper import WhisperModel
-    # 使用 small 模型，平衡速度和质量
-    # compute_type: float16 用于 GPU，int8 用于 CPU
+    # 模型选择：large-v3（高精度）/ medium（平衡）/ small（快速）
+    # GPU 使用 float16，CPU 使用 int8
     device = "cuda" if _check_cuda() else "cpu"
     compute_type = "float16" if device == "cuda" else "int8"
-    _whisper_model = WhisperModel("small", device=device, compute_type=compute_type)
+    _whisper_model = WhisperModel("large-v3", device=device, compute_type=compute_type)
     log.info(f"Whisper 模型加载完成: device={device}, compute_type={compute_type}")
     return _whisper_model
 
