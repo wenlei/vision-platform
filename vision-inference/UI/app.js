@@ -2512,22 +2512,46 @@ async function startListen() {
             statusEl.style.color = 'var(--red)';
           }
         } else {
-          // 浏览器播放
-          const audio = new Audio(audioUrl);
-          playerEl.innerHTML = '';
-          playerEl.appendChild(audio);
-          audio.controls = true;
-          audio.style.width = '100%';
-          audio.style.height = '40px';
-          audio.play();
-          statusEl.textContent = '播放中...';
-          statusEl.style.color = 'var(--green)';
-          listenLog(logEl, `收到音频 ${(audioData.byteLength/1024).toFixed(1)}KB, ${duration}s`);
+          // 显示播放器
+          const playerContainer = document.getElementById('listen-player');
+          const playerEmpty = document.getElementById('listen-player-empty');
+          const audio = document.getElementById('listen-audio');
+          const btnPlay = document.getElementById('btn-play');
+          const playInfo = document.getElementById('playback-info');
+
+          playerContainer.style.display = '';
+          playerEmpty.style.display = 'none';
+          audio.src = audioUrl;
+          audio.style.display = 'none';
+
+          btnPlay.textContent = '▶ 播放';
+          playInfo.textContent = `${duration}s · ${(audioData.byteLength/1024).toFixed(1)}KB`;
+
+          // 播放/停止切换
+          btnPlay.onclick = () => {
+            if (audio.paused) {
+              audio.play();
+              btnPlay.textContent = '⏹ 停止';
+              statusEl.textContent = '播放中...';
+              statusEl.style.color = 'var(--green)';
+              listenLog(logEl, `开始播放 ${duration}s 音频`);
+            } else {
+              audio.pause();
+              audio.currentTime = 0;
+              btnPlay.textContent = '▶ 播放';
+              statusEl.textContent = '已暂停';
+              statusEl.style.color = 'var(--text3)';
+            }
+          };
+
           audio.onended = () => {
+            btnPlay.textContent = '▶ 播放';
             statusEl.textContent = '播放完成 ✅';
             statusEl.style.color = 'var(--green)';
             waveInfo.textContent = `✅ 播放完成 · ${duration}s`;
           };
+
+          listenLog(logEl, `收到音频 ${(audioData.byteLength/1024).toFixed(1)}KB, ${duration}s`);
         }
       } else {
         statusEl.textContent = '获取失败';

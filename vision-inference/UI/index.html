@@ -499,9 +499,14 @@
           <canvas id="waveform-canvas" width="500" height="40" style="width:100%;height:40px;border-radius:4px;background:var(--bg2)"></canvas>
           <div id="waveform-info" style="font-size:9px;color:var(--text3);margin-top:3px;text-align:center">等待录音...</div>
         </div>
-        <div id="listen-player" style="padding:6px 0">
-          <p style="color:var(--text3);font-size:11px">暂无录音。点击"录音"按钮后音频将在此播放。</p>
+        <div id="listen-player" style="padding:6px 0;display:none">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+            <button class="btn" id="btn-play" onclick="togglePlayback()" style="padding:4px 12px;font-size:11px">▶ 播放</button>
+            <span id="playback-info" style="font-size:10px;color:var(--text3)"></span>
+          </div>
+          <audio id="listen-audio" controls style="width:100%;height:32px;display:none"></audio>
         </div>
+        <p id="listen-player-empty" style="color:var(--text3);font-size:11px">暂无录音。点击"录音"按钮后音频将在此播放。</p>
       </div>
 
       <!-- 音频日志 -->
