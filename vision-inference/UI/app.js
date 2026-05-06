@@ -2413,23 +2413,6 @@ async function startListen() {
   statusEl.textContent = '录音中... (5秒)';
   statusEl.style.color = 'var(--blue)';
   listenLog(logEl, `触发录音: ${deviceIp}`);
-  const statusEl = document.getElementById('listen-status');
-  const logEl = document.getElementById('listen-log');
-  const playerEl = document.getElementById('listen-player');
-  const waveContainer = document.getElementById('waveform-container');
-  const waveCanvas = document.getElementById('waveform-canvas');
-  const waveLevel = document.getElementById('waveform-level');
-  const waveInfo = document.getElementById('waveform-info');
-  const deviceIp = document.getElementById('listen-device').value;
-  if (!deviceIp) { toast('请先选择音频设备', 'err'); return; }
-
-  // 显示波形容器
-  waveContainer.style.display = '';
-  waveInfo.textContent = '🔴 录音中...';
-  waveLevel.textContent = '音量: 录音中';
-  statusEl.textContent = '录音中... (5秒)';
-  statusEl.style.color = 'var(--blue)';
-  listenLog(logEl, `触发录音: ${deviceIp}`);
 
   try {
     // 查找设备 MAC
