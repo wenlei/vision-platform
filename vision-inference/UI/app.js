@@ -2864,8 +2864,7 @@ async function startBrowserMic() {
   }
 }
 
-// ── 语音识别（Web Speech API）────────────────────────────
-let _speechRecognition = null;
+// ── 语音识别（服务端 faster-whisper）─────────────────────
 let _speechActive = false;
 
 function toggleSpeech() {
@@ -2876,7 +2875,7 @@ function toggleSpeech() {
   }
 }
 
-function startSpeech() {
+async function startSpeech() {
   const btn = document.getElementById('btn-speech');
   const statusEl = document.getElementById('speech-status');
   const resultEl = document.getElementById('speech-result');
@@ -2884,72 +2883,107 @@ function startSpeech() {
   const finalEl = document.getElementById('speech-final');
   const emptyEl = document.getElementById('speech-empty');
 
-  // 检查浏览器支持
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    statusEl.textContent = '浏览器不支持语音识别（仅 Chrome/Edge）';
-    statusEl.style.color = 'var(--red)';
-    return;
-  }
+  _speechActive = true;
+  btn.textContent = '⏹ 停止识别';
+  btn.style.background = 'var(--red)';
+  statusEl.textContent = '🔴 识别中...';
+  statusEl.style.color = 'var(--blue)';
+  resultEl.style.display = '';
+  emptyEl.style.display = 'none';
+  finalEl.textContent = '';
+  interimEl.textContent = '录音中，请说话...';
 
-  _speechRecognition = new SpeechRecognition();
-  _speechRecognition.continuous = true;
-  _speechRecognition.interimResults = true;
-  _speechRecognition.lang = 'zh-CN';
+  // 使用电脑麦克风持续录音，每 3 秒发送一次识别
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(stream);
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    const buffer = [];
+    source.connect(processor);
+    processor.connect(audioContext.destination);
 
-  _speechRecognition.onstart = () => {
-    _speechActive = true;
-    btn.textContent = '⏹ 停止识别';
-    btn.style.background = 'var(--red)';
-    statusEl.textContent = '🔴 识别中...';
-    statusEl.style.color = 'var(--blue)';
-    resultEl.style.display = '';
-    emptyEl.style.display = 'none';
-    finalEl.textContent = '';
-    interimEl.textContent = '等待语音...';
-  };
+    // 每 3 秒发送一次音频进行识别
+    const sendInterval = setInterval(async () => {
+      if (!_speechActive || buffer.length === 0) return;
 
-  _speechRecognition.onresult = (event) => {
-    let interimText = '';
-    let finalText = '';
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) {
-        finalText += transcript + ' ';
-      } else {
-        interimText += transcript;
+      // 从 buffer 中取出音频数据
+      const audioData = new Float32Array(buffer.splice(0));
+      // 转为 16-bit PCM
+      const pcm16 = new Int16Array(audioData.length);
+      for (let i = 0; i < audioData.length; i++) {
+        const s = Math.max(-1, Math.min(1, audioData[i]));
+        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
       }
-    }
-    finalEl.textContent += finalText;
-    interimEl.textContent = interimText;
-    resultEl.scrollTop = resultEl.scrollHeight;
-  };
 
-  _speechRecognition.onend = () => {
-    // 如果还在活跃状态，自动重启（continuous 模式可能中断）
-    if (_speechActive) {
-      try { _speechRecognition.start(); } catch (e) {}
-    }
-  };
+      try {
+        const r = await fetch(`${API}/speech/recognize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'audio/pcm', 'X-Sample-Rate': '16000', 'X-Device': 'browser' },
+          body: pcm16.buffer,
+          signal: AbortSignal.timeout(10000),
+        });
+        if (r.ok) {
+          const result = await r.json();
+          if (result.text) {
+            finalEl.textContent += result.text + ' ';
+            resultEl.scrollTop = resultEl.scrollHeight;
+            statusEl.textContent = `识别中... (${finalEl.textContent.length}字)`;
+          }
+        }
+      } catch (e) {
+        // 网络错误，忽略继续
+      }
+    }, 3000);
 
-  _speechRecognition.onerror = (event) => {
-    if (event.error !== 'no-speech' && event.error !== 'aborted') {
-      statusEl.textContent = '识别错误: ' + event.error;
-      statusEl.style.color = 'var(--red)';
-    }
-  };
+    // 采集音频数据
+    processor.onaudioprocess = (e) => {
+      if (!_speechActive) return;
+      const input = e.inputBuffer.getChannelData(0);
+      buffer.push(...input);
+      // 限制 buffer 大小（最多 10 秒）
+      if (buffer.length > 160000) buffer.splice(0, 32000);
+    };
 
-  _speechRecognition.start();
+    statusEl.textContent = '🔴 识别中...';
+
+    // 保存引用以便停止
+    window._speechStream = stream;
+    window._speechProcessor = processor;
+    window._speechAudioContext = audioContext;
+    window._speechSendInterval = sendInterval;
+
+  } catch (e) {
+    statusEl.textContent = '错误: ' + e.message;
+    statusEl.style.color = 'var(--red)';
+    _speechActive = false;
+    btn.textContent = '🎙️ 开始识别';
+    btn.style.background = '';
+  }
 }
 
 function stopSpeech() {
   const btn = document.getElementById('btn-speech');
   const statusEl = document.getElementById('speech-status');
   _speechActive = false;
-  if (_speechRecognition) {
-    _speechRecognition.stop();
-    _speechRecognition = null;
+
+  if (window._speechStream) {
+    window._speechStream.getTracks().forEach(t => t.stop());
+    window._speechStream = null;
   }
+  if (window._speechProcessor) {
+    window._speechProcessor.disconnect();
+    window._speechProcessor = null;
+  }
+  if (window._speechAudioContext) {
+    window._speechAudioContext.close();
+    window._speechAudioContext = null;
+  }
+  if (window._speechSendInterval) {
+    clearInterval(window._speechSendInterval);
+    window._speechSendInterval = null;
+  }
+
   btn.textContent = '🎙️ 开始识别';
   btn.style.background = '';
   statusEl.textContent = '已停止';
