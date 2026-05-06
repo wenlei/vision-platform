@@ -2429,7 +2429,7 @@ async function startListen() {
       waveInfo.textContent = '🔴 录音中... (5秒)';
       waveContainer.style.display = '';
 
-      // 录音倒计时（5→0，每秒更新）
+      // 录音倒计时 + 实时频率可视化（用电脑麦克风采集）
       let recSec = 5;
       waveInfo.textContent = `🔴 录音中... ${recSec}s`;
       const recTimer = setInterval(() => {
@@ -2442,9 +2442,55 @@ async function startListen() {
         waveInfo.textContent = `🔴 录音中... ${recSec}s`;
       }, 1000);
 
-      // 等待录音+上传完成（ESP32 录音5秒 + 上传时间）
+      // 用电脑麦克风实时显示频率柱状图
+      let micStream = null;
+      let audioCtx = null;
+      let analyser = null;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new AudioContext({ sampleRate: 16000 });
+        const source = audioCtx.createMediaStreamSource(micStream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        const ctx = waveCanvas.getContext('2d');
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        function drawMicBars() {
+          if (recSec <= 0) return;
+          analyser.getByteFrequencyData(dataArray);
+          const width = waveCanvas.width;
+          const height = waveCanvas.height;
+          ctx.fillStyle = '#1a1a2e';
+          ctx.fillRect(0, 0, width, height);
+
+          const barCount = 40;
+          const barWidth = width / barCount;
+          const step = Math.floor(bufferLength / barCount);
+
+          for (let i = 0; i < barCount; i++) {
+            const val = dataArray[i * step];
+            const barHeight = (val / 255) * (height * 0.85);
+            const hue = 200 + (i / barCount) * 160;
+            ctx.fillStyle = `hsl(${hue}, 70%, ${40 + (val/255)*25}%)`;
+            ctx.fillRect(i * barWidth + 0.5, height - barHeight - 2, barWidth - 1, barHeight);
+          }
+          waveLevel.textContent = `音量: ${Math.max(...dataArray)}`;
+          requestAnimationFrame(drawMicBars);
+        }
+        drawMicBars();
+      } catch (e) {
+        // 麦克风不可用，显示等待状态
+        waveInfo.textContent = '🔴 录音中... (无实时波形)';
+      }
+
+      // 等待录音+上传完成
       await new Promise(resolve => setTimeout(resolve, 8000));
       clearInterval(recTimer);
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      if (audioCtx) audioCtx.close();
 
       // 从服务器获取 ESP32 的录音
       statusEl.textContent = '获取录音...';
