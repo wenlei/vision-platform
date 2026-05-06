@@ -60,7 +60,7 @@ function onPageLoad(name) {
   if (name === 'items')   loadItems();
   if (name === 'faces')   loadFaces();
   if (name === 'devices') initDevices();
-  if (name === 'listen')  loadListenDevices();
+  if (name === 'listen')  loadAudioDevices();
   if (name === 'api')     initApiPage();
 }
 
@@ -2281,75 +2281,49 @@ function saveNavOrder(container) {
 // ── Listen / Audio 页面 ─────────────────────────────────────
 let listenDevice = '';
 
-async function loadListenDevices() {
-  // 加载设备列表（用于录音选择）
-  const sel = document.getElementById('listen-device');
-  if (sel) {
-    try {
-      const r = await fetch(API + '/devices');
-      const data = await r.json();
-      const devices = data.devices || [];
-      const audioDevices = devices.filter(d => {
-        const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',');
-        return caps.includes('audio_in') || caps.includes('audio_out');
-      });
-      sel.innerHTML = '';
-      if (audioDevices.length === 0) {
-        sel.innerHTML = '<option value="">无音频设备</option>';
-      } else {
-        audioDevices.forEach(d => {
-          const opt = document.createElement('option');
-          opt.value = d.ip;
-          opt.textContent = `${d.name || d.ip} (${d.ip})`;
-          sel.appendChild(opt);
-        });
-        listenDevice = audioDevices[0].ip;
-      }
-    } catch { sel.innerHTML = '<option value="">加载失败</option>'; }
-  }
+// ── Audio 页 ─────────────────────────────────────────────
+let _currentAudioDevice = null;
 
-  // 加载设备能力配置
-  const listEl = document.getElementById('audio-device-list');
-  if (listEl) {
-    try {
-      const r = await fetch(API + '/devices');
-      const data = await r.json();
-      const devices = data.devices || [];
-      if (!devices.length) {
-        listEl.innerHTML = '<p style="color:var(--text3);font-size:12px">无注册设备</p>';
-        return;
-      }
-      listEl.innerHTML = '';
-      devices.forEach(d => {
-        const caps = Array.isArray(d.capability) ? d.capability : (d.capability || 'video_in').split(',');
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px';
-        row.innerHTML = `
-          <div style="min-width:120px;font-weight:600">${esc(d.name)}</div>
-          <div style="min-width:100px;color:var(--text3)">${esc(d.ip || '-')}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
-              <input type="checkbox" name="cap-${d.mac.replace(/:/g,'_')}" value="video_in" ${caps.includes('video_in')?'checked':''} onchange="updateDeviceCapability('${d.mac}',this.value,this.checked)">
-              视频
-            </label>
-            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
-              <input type="checkbox" name="cap-${d.mac.replace(/:/g,'_')}" value="audio_in" ${caps.includes('audio_in')?'checked':''} onchange="updateDeviceCapability('${d.mac}',this.value,this.checked)">
-              麦克风
-            </label>
-            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
-              <input type="checkbox" name="cap-${d.mac.replace(/:/g,'_')}" value="audio_out" ${caps.includes('audio_out')?'checked':''} onchange="updateDeviceCapability('${d.mac}',this.value,this.checked)">
-              扬声器
-            </label>
-            <label style="display:flex;align-items:center;gap:3px;cursor:pointer">
-              <input type="checkbox" name="cap-${d.mac.replace(/:/g,'_')}" value="sensor" ${caps.includes('sensor')?'checked':''} onchange="updateDeviceCapability('${d.mac}',this.value,this.checked)">
-              传感器
-            </label>
-          </div>
-        `;
-        listEl.appendChild(row);
-      });
-    } catch { listEl.innerHTML = '<p style="color:var(--red);font-size:12px">加载失败</p>'; }
+async function loadAudioDevices() {
+  const bar = document.getElementById('audio-cam-bar');
+  if (!bar) return;
+  try {
+    const r = await fetch(API + '/devices');
+    const data = await r.json();
+    const devices = data.devices || [];
+    const audioDevices = devices.filter(d => {
+      const caps = Array.isArray(d.capability) ? d.capability : (d.capability || '').split(',');
+      return caps.includes('audio_in') || caps.includes('audio_out');
+    });
+    if (!audioDevices.length) {
+      bar.innerHTML = '<span style="color:var(--text3);font-size:11px">无音频设备</span>';
+      return;
+    }
+    bar.innerHTML = '';
+    audioDevices.forEach((d, i) => {
+      const cap = Array.isArray(d.capability) ? d.capability : [d.capability || 'audio'];
+      const isOut = cap.includes('audio_out');
+      const isIn = cap.includes('audio_in');
+      const tag = isOut ? '🔊 扬声器' : (isIn ? '🎤 麦克风' : '🎵 音频');
+      const card = document.createElement('div');
+      card.className = 'cam-card' + (i === 0 ? ' active' : '');
+      card.dataset.mac = d.mac;
+      card.innerHTML = `<div class="cam-card-name">${esc(d.name)}</div><div class="cam-card-meta">${esc(d.ip)} · ${tag}</div>`;
+      card.onclick = () => selectAudioDevice(d, card);
+      bar.appendChild(card);
+      if (i === 0) _currentAudioDevice = d;
+    });
+  } catch {
+    bar.innerHTML = '<span style="color:var(--red);font-size:11px">加载失败</span>';
   }
+}
+
+function selectAudioDevice(device, cardEl) {
+  document.querySelectorAll('#audio-cam-bar .cam-card').forEach(c => c.classList.remove('active'));
+  cardEl.classList.add('active');
+  _currentAudioDevice = device;
+  document.getElementById('listen-status').textContent = `已选择: ${device.name}`;
+  document.getElementById('listen-status').style.color = 'var(--green)';
 }
 
 async function updateDeviceCapability(mac, value, checked) {
@@ -2404,7 +2378,7 @@ async function startListen() {
   const waveCanvas = document.getElementById('waveform-canvas');
   const waveLevel = document.getElementById('waveform-level');
   const waveInfo = document.getElementById('waveform-info');
-  const deviceIp = document.getElementById('listen-device').value;
+  const deviceIp = _currentAudioDevice ? _currentAudioDevice.ip : '';
   if (!deviceIp) { toast('请先选择音频设备', 'err'); return; }
 
   _listenAbort = new AbortController();
@@ -2882,7 +2856,7 @@ async function startSpeech() {
   const finalEl = document.getElementById('speech-final');
   const emptyEl = document.getElementById('speech-empty');
 
-  const deviceIp = document.getElementById('listen-device').value;
+  const deviceIp = _currentAudioDevice ? _currentAudioDevice.ip : '';
   if (!deviceIp) { toast('请先选择音频设备', 'err'); return; }
 
   _speechActive = true;
@@ -2965,7 +2939,7 @@ async function testSpeechRecognition() {
   const outputEl = document.getElementById('speech-test-output');
   const btn = document.getElementById('btn-speech-test');
 
-  const deviceIp = document.getElementById('listen-device').value;
+  const deviceIp = _currentAudioDevice ? _currentAudioDevice.ip : '';
   if (!deviceIp) { toast('请先选择音频设备', 'err'); return; }
 
   btn.disabled = true;
