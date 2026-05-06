@@ -327,13 +327,14 @@ XIAO ESP32S3 Sense + MAX98357A I2S amplifier for voice interaction.
 
 | MAX98357A | XIAO ESP32S3 Left Rail |
 |-----------|----------------------|
-| LRC       | D7 (GPIO7)           |
-| BCLK      | D8 (GPIO8)           |
-| DIN       | D9 (GPIO9)           |
-| GAIN      | D10 (floating)       |
+| DIN       | D1 (GPIO1)           |
+| BCLK      | D2 (GPIO2)           |
+| LRC       | D3 (GPIO3)           |
 | SD        | 3V3                  |
 | GND       | GND                  |
 | VIN       | VUSB (5V)            |
+
+> ⚠️ GPIO 7/8/9 被 MicroSD 卡槽占用，不能用于 MAX98357A。必须使用 GPIO 1/2/3（参考 ESP-AI 官方文档）。
 
 **Voice interaction pipeline (fully local):**
 ```
@@ -359,4 +360,54 @@ Use `.scripts/link-devices.py` to create stable symlinks under `~/dev/`:
 ```bash
 python3 .scripts/link-devices.py        # create/update symlinks
 python3 .scripts/link-devices.py --list # check status
+```
+
+## Audio Inference Pipeline (Win server)
+
+Full local voice interaction chain:
+```
+ESP32 mic (PDM) → Wi-Fi → /audio/infer → Whisper → LLM → Kokoro TTS → /speak → ESP32 speaker
+```
+
+### Win server components required (mimo tasks H1-H3)
+
+**H1 — Rebuild Docker image:**
+```bash
+docker compose -f docker/docker-compose.gpu.yml build --no-cache
+```
+Dockerfile.gpu already updated with:
+- System deps: `libsndfile1`, `ffmpeg`
+- Python deps: `faster-whisper==1.1.1`, `kokoro-onnx==0.4.2`, `soundfile==0.12.1`
+- llama-cpp-python compiled with CUDA: `CMAKE_ARGS="-DGGML_CUDA=on"`
+
+**H2 — Download LLM model (.gguf):**
+Place in `C:\Users\spade\vision-platform\models\` (mounted to `/app/models/` in container)
+Recommended: `qwen2.5-3b-instruct.Q4_K_M.gguf` or `llama-3.2-3b-instruct.Q4_K_M.gguf`
+
+**H3 — Whisper model:**
+Downloads automatically on first call to `/audio/infer`, or manually pre-download to:
+`C:\Users\spade\vision-platform\models\whisper\`
+
+**H4 — audio.py** ✅ Done
+- `vision-inference/api/audio.py` — full pipeline implemented
+- Lazy loading: components initialize on first `/audio/infer` call
+- Check status: `GET http://192.168.50.71:8000/audio/status`
+
+### ESP32 audio device (desk-cam-03)
+
+- IP: `192.168.50.99` (static)
+- Firmware: `esp32-audio/`
+- Mic: built-in PDM (GPIO42 CLK, GPIO41 DATA)
+- Speaker: MAX98357A via jumper wires
+  - LRC → D3 (GPIO4), BCLK → D2 (GPIO3), DIN → D1 (GPIO2)
+  - GND → GND, VIN → VUSB, GAIN/SD floating
+- Endpoints: `GET /status`, `POST /speak`, `POST /record`
+
+### Test full pipeline
+```bash
+# Check inference components loaded
+curl http://192.168.50.71:8000/audio/status
+
+# Trigger recording from Mac (button or HTTP)
+curl -X POST http://192.168.50.99/record
 ```

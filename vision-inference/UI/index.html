@@ -478,24 +478,29 @@
       <div class="card" style="margin-top:12px">
         <div class="card-title">录音与播放</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-          <select id="listen-device" style="width:200px;height:36px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px">
+          <div style="font-size:10px;color:var(--text3)">输入设备</div>
+          <select id="listen-device" style="width:160px;height:32px;padding:0 6px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:11px">
             <option value="">加载中...</option>
           </select>
-          <button class="btn" onclick="startListen()" id="btn-record" style="padding:6px 16px">🎤 ESP32 录音 5s</button>
-          <button class="btn" onclick="startBrowserMic()" id="btn-browser-mic" style="padding:6px 16px">🎙️ 浏览器录音 5s</button>
-          <span id="listen-status" style="font-size:12px;color:var(--text3)"></span>
+          <div style="font-size:10px;color:var(--text3);margin-left:4px">输出到</div>
+          <select id="output-device" style="width:160px;height:32px;padding:0 6px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:11px">
+            <option value="browser">浏览器扬声器</option>
+            <option value="esp32">ESP32 扬声器</option>
+          </select>
+          <button class="btn" onclick="startListen()" id="btn-record" style="padding:5px 14px;font-size:11px">🎤 录音 5s</button>
+          <span id="listen-status" style="font-size:11px;color:var(--text3)"></span>
         </div>
         <!-- 波形可视化 -->
-        <div id="waveform-container" style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:10px;display:none">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-size:11px;color:var(--text3)">📊 录音波形</span>
-            <span id="waveform-level" style="font-size:11px;color:var(--text3)">音量: ---</span>
+        <div id="waveform-container" style="background:var(--bg3);border-radius:8px;padding:8px;margin-bottom:10px;display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:10px;color:var(--text3)">📊 实时波形</span>
+            <span id="waveform-level" style="font-size:10px;color:var(--text3)">音量: ---</span>
           </div>
-          <canvas id="waveform-canvas" width="500" height="80" style="width:100%;height:80px;border-radius:4px;background:var(--bg2)"></canvas>
-          <div id="waveform-info" style="font-size:10px;color:var(--text3);margin-top:4px;text-align:center">等待录音...</div>
+          <canvas id="waveform-canvas" width="500" height="40" style="width:100%;height:40px;border-radius:4px;background:var(--bg2)"></canvas>
+          <div id="waveform-info" style="font-size:9px;color:var(--text3);margin-top:3px;text-align:center">等待录音...</div>
         </div>
-        <div id="listen-player" style="padding:8px 0">
-          <p style="color:var(--text3);font-size:12px">暂无录音。点击"录音"按钮后音频将在此播放。</p>
+        <div id="listen-player" style="padding:6px 0">
+          <p style="color:var(--text3);font-size:11px">暂无录音。点击"录音"按钮后音频将在此播放。</p>
         </div>
       </div>
 

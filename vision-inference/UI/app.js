@@ -2406,7 +2406,7 @@ async function startListen() {
       waveInfo.textContent = '🔴 录音中... (5秒)';
       waveContainer.style.display = '';
 
-      // 实时绘制录音中的模拟波形（等待服务器返回）
+      // 实时绘制录音中的模拟波形
       const ctx = waveCanvas.getContext('2d');
       let recFrame = 0;
       const recAnim = setInterval(() => {
@@ -2416,21 +2416,19 @@ async function startListen() {
         ctx.fillStyle = '#1a1a2e';
         ctx.fillRect(0, 0, width, height);
 
-        // 模拟音频波形（正弦波 + 随机噪声，模拟真实音频）
-        const barCount = 80;
+        const barCount = 120;
         const barWidth = width / barCount;
         for (let i = 0; i < barCount; i++) {
-          const phase = (i / barCount) * Math.PI * 4 + recFrame * 0.15;
-          const noise = Math.random() * 0.3;
-          const val = (Math.sin(phase) * 0.5 + noise) * 0.6;
-          const barHeight = Math.max(2, val * (height - 10));
+          const phase = (i / barCount) * Math.PI * 4 + recFrame * 0.12;
+          const noise = Math.random() * 0.25;
+          const val = (Math.sin(phase) * 0.5 + noise) * 0.5;
+          const barHeight = Math.max(1, val * (height * 0.7));
           const hue = 0 + val * 120;
-          ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
-          ctx.fillRect(i * barWidth + 1, height / 2 - barHeight / 2, barWidth - 2, barHeight);
+          ctx.fillStyle = `hsl(${hue}, 65%, 50%)`;
+          ctx.fillRect(i * barWidth + 0.5, height / 2 - barHeight / 2, barWidth - 1, barHeight);
         }
-        // 中心线
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#2a2a4a';
+        ctx.lineWidth = 0.5;
         ctx.beginPath();
         ctx.moveTo(0, height / 2);
         ctx.lineTo(width, height / 2);
@@ -2488,25 +2486,49 @@ async function startListen() {
         waveInfo.textContent = `✅ 音频就绪 · ${duration}s · ${(audioData.byteLength/1024).toFixed(1)}KB`;
         waveLevel.textContent = '音量: 已收到';
 
-        // 播放音频
-        const audio = new Audio(audioUrl);
-        playerEl.innerHTML = '';
-        playerEl.appendChild(audio);
-        audio.controls = true;
-        audio.style.width = '100%';
-        audio.style.height = '40px';
-        audio.play();
-
-        statusEl.textContent = '播放中...';
-        statusEl.style.color = 'var(--green)';
-        listenLog(logEl, `收到音频 ${(audioData.byteLength/1024).toFixed(1)}KB, ${duration}s`);
-
-        // 播放完成后更新状态
-        audio.onended = () => {
-          statusEl.textContent = '播放完成 ✅';
+        // 根据输出设备选择播放方式
+        const outputDevice = document.getElementById('output-device').value;
+        if (outputDevice === 'esp32') {
+          // 发送到 ESP32 扬声器播放
+          statusEl.textContent = '发送到 ESP32...';
+          listenLog(logEl, `发送 ${duration}s 音频到 ESP32 扬声器...`);
+          try {
+            const speakR = await fetch(API + '/speak', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/octet-stream', 'X-Device': dev.mac },
+              body: audioData,
+              signal: AbortSignal.timeout(10000),
+            });
+            if (speakR.ok) {
+              statusEl.textContent = '已发送到 ESP32 ✅';
+              statusEl.style.color = 'var(--green)';
+              listenLog(logEl, 'ESP32 播放指令已发送');
+            } else {
+              statusEl.textContent = '发送失败';
+              statusEl.style.color = 'var(--red)';
+            }
+          } catch (e) {
+            statusEl.textContent = '发送失败: ' + e.message;
+            statusEl.style.color = 'var(--red)';
+          }
+        } else {
+          // 浏览器播放
+          const audio = new Audio(audioUrl);
+          playerEl.innerHTML = '';
+          playerEl.appendChild(audio);
+          audio.controls = true;
+          audio.style.width = '100%';
+          audio.style.height = '40px';
+          audio.play();
+          statusEl.textContent = '播放中...';
           statusEl.style.color = 'var(--green)';
-          waveInfo.textContent = `✅ 播放完成 · ${duration}s`;
-        };
+          listenLog(logEl, `收到音频 ${(audioData.byteLength/1024).toFixed(1)}KB, ${duration}s`);
+          audio.onended = () => {
+            statusEl.textContent = '播放完成 ✅';
+            statusEl.style.color = 'var(--green)';
+            waveInfo.textContent = `✅ 播放完成 · ${duration}s`;
+          };
+        }
       } else {
         statusEl.textContent = '获取失败';
         statusEl.style.color = 'var(--red)';
@@ -2533,16 +2555,13 @@ function drawWaveform(canvas, pcmData, sampleRate) {
   const height = canvas.height;
   const data = new Int16Array(pcmData);
 
-  // 清空画布
   ctx.fillStyle = '#1a1a2e';
   ctx.fillRect(0, 0, width, height);
 
-  // 计算每个柱子的宽度
-  const barCount = 100;
+  const barCount = 120;
   const barWidth = width / barCount;
   const samplesPerBar = Math.floor(data.length / barCount);
 
-  // 找到最大值用于归一化
   let maxVal = 0;
   for (let i = 0; i < data.length; i++) {
     const abs = Math.abs(data[i]);
@@ -2550,30 +2569,22 @@ function drawWaveform(canvas, pcmData, sampleRate) {
   }
   if (maxVal === 0) maxVal = 1;
 
-  // 绘制柱状图
   for (let i = 0; i < barCount; i++) {
     let sum = 0;
     for (let j = 0; j < samplesPerBar; j++) {
       sum += Math.abs(data[i * samplesPerBar + j]);
     }
     const avg = sum / samplesPerBar;
-    const barHeight = (avg / maxVal) * (height - 10);
+    const barHeight = (avg / maxVal) * (height * 0.7);
 
-    // 渐变颜色：中间高（蓝），两边低（灰）
-    const hue = 220 + (i / barCount) * 40;
-    const lightness = 40 + (barHeight / (height - 10)) * 30;
-    ctx.fillStyle = `hsl(${hue}, 80%, ${lightness}%)`;
-    ctx.fillRect(
-      i * barWidth + 1,
-      height / 2 - barHeight / 2,
-      barWidth - 2,
-      barHeight
-    );
+    const hue = 200 + (i / barCount) * 60;
+    const lightness = 45 + (barHeight / height) * 25;
+    ctx.fillStyle = `hsl(${hue}, 75%, ${lightness}%)`;
+    ctx.fillRect(i * barWidth + 0.5, height / 2 - barHeight / 2, barWidth - 1, barHeight);
   }
 
-  // 绘制中心线
-  ctx.strokeStyle = '#333';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#2a2a4a';
+  ctx.lineWidth = 0.5;
   ctx.beginPath();
   ctx.moveTo(0, height / 2);
   ctx.lineTo(width, height / 2);
