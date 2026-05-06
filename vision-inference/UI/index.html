@@ -487,16 +487,16 @@
             <option value="browser">浏览器扬声器</option>
             <option value="esp32">ESP32 扬声器</option>
           </select>
-          <button class="btn" onclick="startListen()" id="btn-record" style="padding:5px 14px;font-size:11px">🎤 录音 5s</button>
+          <button class="btn" onclick="toggleListen()" id="btn-record" style="padding:5px 14px;font-size:11px">🎤 录音 5s</button>
           <span id="listen-status" style="font-size:11px;color:var(--text3)"></span>
         </div>
         <!-- 波形可视化 -->
-        <div id="waveform-container" style="background:var(--bg3);border-radius:8px;padding:8px;margin-bottom:10px;display:none">
+        <div id="waveform-container" style="background:var(--bg3);border-radius:8px;padding:8px;margin-bottom:10px;display:none;width:50%;max-width:300px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-size:10px;color:var(--text3)">📊 实时波形</span>
+            <span style="font-size:10px;color:var(--text3)">📊 音频波形</span>
             <span id="waveform-level" style="font-size:10px;color:var(--text3)">音量: ---</span>
           </div>
-          <canvas id="waveform-canvas" width="500" height="40" style="width:100%;height:40px;border-radius:4px;background:var(--bg2)"></canvas>
+          <canvas id="waveform-canvas" width="300" height="60" style="width:100%;height:60px;border-radius:4px;background:var(--bg2)"></canvas>
           <div id="waveform-info" style="font-size:9px;color:var(--text3);margin-top:3px;text-align:center">等待录音...</div>
         </div>
         <div id="listen-player" style="padding:6px 0;display:none">

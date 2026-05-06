@@ -2372,7 +2372,47 @@ async function updateDeviceCapability(mac, value, checked) {
   } catch { toast('更新失败', 'err'); }
 }
 
+// ── 录音按钮切换 ─────────────────────────────────────
+let _listenAbort = null;
+
+function toggleListen() {
+  const btn = document.getElementById('btn-record');
+  if (_listenAbort) {
+    // 停止录音
+    _listenAbort.abort();
+    _listenAbort = null;
+    btn.textContent = '🎤 录音 5s';
+    btn.style.background = '';
+    document.getElementById('listen-status').textContent = '已停止';
+    document.getElementById('listen-status').style.color = 'var(--text3)';
+    return;
+  }
+  // 开始录音
+  btn.textContent = '⏹ 停止';
+  btn.style.background = 'var(--red)';
+  startListen();
+}
+
 async function startListen() {
+  const statusEl = document.getElementById('listen-status');
+  const logEl = document.getElementById('listen-log');
+  const playerContainer = document.getElementById('listen-player');
+  const playerEmpty = document.getElementById('listen-player-empty');
+  const btnPlay = document.getElementById('btn-play');
+  const playInfo = document.getElementById('playback-info');
+  const waveContainer = document.getElementById('waveform-container');
+  const waveCanvas = document.getElementById('waveform-canvas');
+  const waveLevel = document.getElementById('waveform-level');
+  const waveInfo = document.getElementById('waveform-info');
+  const deviceIp = document.getElementById('listen-device').value;
+  if (!deviceIp) { toast('请先选择音频设备', 'err'); return; }
+
+  _listenAbort = new AbortController();
+  waveContainer.style.display = '';
+  waveInfo.textContent = '🔴 录音中...';
+  statusEl.textContent = '录音中... (5秒)';
+  statusEl.style.color = 'var(--blue)';
+  listenLog(logEl, `触发录音: ${deviceIp}`);
   const statusEl = document.getElementById('listen-status');
   const logEl = document.getElementById('listen-log');
   const playerEl = document.getElementById('listen-player');
@@ -2406,7 +2446,7 @@ async function startListen() {
       waveInfo.textContent = '🔴 录音中... (5秒)';
       waveContainer.style.display = '';
 
-      // 实时绘制录音中的模拟波形
+      // 实时绘制频率响应动画
       const ctx = waveCanvas.getContext('2d');
       let recFrame = 0;
       const recAnim = setInterval(() => {
@@ -2416,23 +2456,23 @@ async function startListen() {
         ctx.fillStyle = '#1a1a2e';
         ctx.fillRect(0, 0, width, height);
 
-        const barCount = 120;
+        // 模拟频率响应柱状图（低频→高频，从左到右）
+        const barCount = 40;
         const barWidth = width / barCount;
         for (let i = 0; i < barCount; i++) {
-          const phase = (i / barCount) * Math.PI * 4 + recFrame * 0.12;
-          const noise = Math.random() * 0.25;
-          const val = (Math.sin(phase) * 0.5 + noise) * 0.5;
-          const barHeight = Math.max(1, val * (height * 0.7));
-          const hue = 0 + val * 120;
-          ctx.fillStyle = `hsl(${hue}, 65%, 50%)`;
-          ctx.fillRect(i * barWidth + 0.5, height / 2 - barHeight / 2, barWidth - 1, barHeight);
+          // 每个频段有不同的响应模式
+          const freq = i / barCount;
+          const base = Math.sin(freq * Math.PI) * 0.6;
+          const noise = Math.random() * 0.3;
+          const voice = Math.sin(recFrame * 0.08 + freq * 2) * 0.4;
+          const val = (base + noise + voice) * 0.5;
+          const barHeight = Math.max(1, val * (height * 0.8));
+          // 颜色：低频蓝 → 中频绿 → 高频红
+          const hue = 200 + freq * 160;
+          const lightness = 45 + val * 20;
+          ctx.fillStyle = `hsl(${hue}, 70%, ${lightness}%)`;
+          ctx.fillRect(i * barWidth + 0.5, height - barHeight - 2, barWidth - 1, barHeight);
         }
-        ctx.strokeStyle = '#2a2a4a';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(0, height / 2);
-        ctx.lineTo(width, height / 2);
-        ctx.stroke();
         waveLevel.textContent = `录音中... ${Math.min(5, Math.floor(recFrame / 10))}/5s`;
       }, 80);
 
@@ -2582,37 +2622,40 @@ function drawWaveform(canvas, pcmData, sampleRate) {
   ctx.fillStyle = '#1a1a2e';
   ctx.fillRect(0, 0, width, height);
 
-  const barCount = 120;
-  const barWidth = width / barCount;
-  const samplesPerBar = Math.floor(data.length / barCount);
+  // 计算 FFT 频率响应
+  const fftSize = 256;
+  const freqBins = fftSize / 2;
+  const fftData = new Float32Array(freqBins);
 
+  // 分段计算频率响应
+  const segSize = Math.floor(data.length / 4);
+  for (let seg = 0; seg < 4; seg++) {
+    const segStart = seg * segSize;
+    for (let i = 0; i < freqBins && (segStart + i * 2) < data.length; i++) {
+      const real = data[segStart + i * 2] || 0;
+      const imag = data[segStart + i * 2 + 1] || 0;
+      fftData[i] += Math.sqrt(real * real + imag * imag) / 4;
+    }
+  }
+
+  // 绘制频率响应柱状图（从左到右 = 低频到高频）
+  const barCount = 40;
+  const barWidth = width / barCount;
   let maxVal = 0;
-  for (let i = 0; i < data.length; i++) {
-    const abs = Math.abs(data[i]);
-    if (abs > maxVal) maxVal = abs;
+  for (let i = 0; i < freqBins; i++) {
+    if (fftData[i] > maxVal) maxVal = fftData[i];
   }
   if (maxVal === 0) maxVal = 1;
 
   for (let i = 0; i < barCount; i++) {
-    let sum = 0;
-    for (let j = 0; j < samplesPerBar; j++) {
-      sum += Math.abs(data[i * samplesPerBar + j]);
-    }
-    const avg = sum / samplesPerBar;
-    const barHeight = (avg / maxVal) * (height * 0.7);
-
-    const hue = 200 + (i / barCount) * 60;
-    const lightness = 45 + (barHeight / height) * 25;
-    ctx.fillStyle = `hsl(${hue}, 75%, ${lightness}%)`;
-    ctx.fillRect(i * barWidth + 0.5, height / 2 - barHeight / 2, barWidth - 1, barHeight);
+    const binIdx = Math.floor(i * freqBins / barCount);
+    const val = fftData[binIdx] / maxVal;
+    const barHeight = val * (height * 0.85);
+    // 颜色：低频蓝 → 中频绿 → 高频红
+    const hue = 200 + (i / barCount) * 160;
+    ctx.fillStyle = `hsl(${hue}, 70%, ${40 + val * 25}%)`;
+    ctx.fillRect(i * barWidth + 0.5, height - barHeight - 2, barWidth - 1, barHeight);
   }
-
-  ctx.strokeStyle = '#2a2a4a';
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(0, height / 2);
-  ctx.lineTo(width, height / 2);
-  ctx.stroke();
 }
 
 function listenLog(logEl, msg) {
