@@ -487,24 +487,22 @@
             <option value="browser">浏览器扬声器</option>
             <option value="esp32">ESP32 扬声器</option>
           </select>
-          <button class="btn" onclick="toggleListen()" id="btn-record" style="padding:5px 14px;font-size:11px">🎤 录音 5s</button>
+          <button class="btn" onclick="startRecord()" id="btn-record" style="padding:5px 14px;font-size:11px">🎤 录音 5s</button>
+          <button class="btn" onclick="stopOrPlay()" id="btn-action" disabled style="padding:5px 14px;font-size:11px;opacity:0.5">⏹ 停止/播放</button>
           <span id="listen-status" style="font-size:11px;color:var(--text3)"></span>
         </div>
-        <!-- 波形可视化 -->
-        <div id="waveform-container" style="background:var(--bg3);border-radius:8px;padding:8px;margin-bottom:10px;display:none;width:50%;max-width:300px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-size:10px;color:var(--text3)">📊 音频波形</span>
+        <!-- 瞬时音量可视化 -->
+        <div id="waveform-container" style="background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:10px;display:none;width:50%;max-width:300px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:10px;color:var(--text3)">🔊 瞬时音量</span>
             <span id="waveform-level" style="font-size:10px;color:var(--text3)">音量: ---</span>
           </div>
-          <canvas id="waveform-canvas" width="300" height="60" style="width:100%;height:60px;border-radius:4px;background:var(--bg2)"></canvas>
-          <div id="waveform-info" style="font-size:9px;color:var(--text3);margin-top:3px;text-align:center">等待录音...</div>
+          <canvas id="waveform-canvas" width="280" height="120" style="width:100%;height:120px;border-radius:6px;background:var(--bg2);display:block"></canvas>
+          <div id="waveform-info" style="font-size:9px;color:var(--text3);margin-top:4px;text-align:center">等待录音...</div>
         </div>
         <div id="listen-player" style="padding:6px 0;display:none">
-          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-            <button class="btn" id="btn-play" onclick="togglePlayback()" style="padding:4px 12px;font-size:11px">▶ 播放</button>
-            <span id="playback-info" style="font-size:10px;color:var(--text3)"></span>
-          </div>
-          <audio id="listen-audio" controls style="width:100%;height:32px;display:none"></audio>
+          <span id="playback-info" style="font-size:10px;color:var(--text3)"></span>
+          <audio id="listen-audio" style="display:none"></audio>
         </div>
         <p id="listen-player-empty" style="color:var(--text3);font-size:11px">暂无录音。点击"录音"按钮后音频将在此播放。</p>
       </div>
@@ -513,9 +511,27 @@
       <div class="card" style="margin-top:12px">
         <div class="card-title">🎤 语音识别</div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-          <button class="btn" id="btn-speech" onclick="toggleSpeech()" style="padding:5px 14px;font-size:11px">🎙️ 开始识别</button>
+          <button class="btn" id="btn-speech" onclick="startSpeech()" style="padding:5px 14px;font-size:11px">🎙️ 开始识别</button>
           <span id="speech-status" style="font-size:11px;color:var(--text3)">未启动</span>
         </div>
+        <div id="speech-result" style="background:var(--bg2);border-radius:6px;padding:10px;min-height:40px;font-size:13px;color:var(--text);white-space:pre-wrap;display:none">
+          <span id="speech-interim" style="color:var(--text3);font-style:italic"></span>
+          <span id="speech-final"></span>
+        </div>
+        <p id="speech-empty" style="color:var(--text3);font-size:11px">点击"开始识别"后，对着麦克风说话即可实时转写。</p>
+      </div>
+
+      <!-- 语音识别测试 -->
+      <div class="card" style="margin-top:12px">
+        <div class="card-title">🧪 语音识别测试</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <button class="btn" id="btn-speech-test" onclick="testSpeechRecognition()" style="padding:5px 14px;font-size:11px">▶ 测试识别</button>
+          <span id="speech-test-status" style="font-size:11px;color:var(--text3)">等待测试...</span>
+        </div>
+        <div id="speech-test-result" style="background:var(--bg2);border-radius:6px;padding:10px;min-height:40px;font-size:12px;color:var(--text);white-space:pre-wrap;display:none">
+          <div id="speech-test-output"></div>
+        </div>
+      </div>
         <div id="speech-result" style="background:var(--bg2);border-radius:6px;padding:10px;min-height:40px;font-size:13px;color:var(--text);white-space:pre-wrap;display:none">
           <span id="speech-interim" style="color:var(--text3);font-style:italic"></span>
           <span id="speech-final"></span>

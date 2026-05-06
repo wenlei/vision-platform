@@ -2957,3 +2957,101 @@ function stopSpeech() {
   statusEl.textContent = '已停止';
   statusEl.style.color = 'var(--text3)';
 }
+
+// ── 语音识别测试 ──────────────────────────────────────────
+async function testSpeechRecognition() {
+  const statusEl = document.getElementById('speech-test-status');
+  const resultEl = document.getElementById('speech-test-result');
+  const outputEl = document.getElementById('speech-test-output');
+  const btn = document.getElementById('btn-speech-test');
+
+  const deviceIp = document.getElementById('listen-device').value;
+  if (!deviceIp) { toast('请先选择音频设备', 'err'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ 测试中...';
+  statusEl.textContent = '正在测试语音识别...';
+  resultEl.style.display = '';
+  outputEl.textContent = '';
+
+  try {
+    // 1. 查找设备
+    const devices = (await (await fetch(API + '/devices')).json()).devices || [];
+    const dev = devices.find(d => d.ip === deviceIp);
+    if (!dev) {
+      statusEl.textContent = '设备未注册';
+      btn.disabled = false;
+      btn.textContent = '▶ 测试识别';
+      return;
+    }
+
+    // 2. 触发 ESP32 录音
+    statusEl.textContent = '🎤 录音中 (5秒)...';
+    outputEl.textContent = '正在录音，请说话...\n';
+    const recordR = await fetch(API + '/devices/' + encodeURIComponent(dev.mac) + '/record', {
+      method: 'POST',
+      signal: AbortSignal.timeout(40000),
+    });
+    const recordData = await recordR.json();
+    if (recordData.status !== 'recording_started') {
+      statusEl.textContent = '录音启动失败';
+      btn.disabled = false;
+      btn.textContent = '▶ 测试识别';
+      return;
+    }
+
+    // 3. 等待录音完成
+    outputEl.textContent += '录音中...等待 5 秒\n';
+    await new Promise(resolve => setTimeout(resolve, 8000));
+
+    // 4. 获取录音数据
+    statusEl.textContent = '📥 获取录音...';
+    outputEl.textContent += '录音完成，正在获取音频...\n';
+    const audioR = await fetch(`${API}/audio/latest?device=${encodeURIComponent(dev.name)}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!audioR.ok) {
+      statusEl.textContent = '获取录音失败';
+      btn.disabled = false;
+      btn.textContent = '▶ 测试识别';
+      return;
+    }
+    const audioData = await audioR.arrayBuffer();
+    outputEl.textContent += `录音大小: ${(audioData.byteLength/1024).toFixed(1)}KB\n`;
+
+    // 5. 发送到语音识别
+    statusEl.textContent = '🗣️ 识别中...';
+    outputEl.textContent += '正在识别语音...\n';
+    const speechR = await fetch(`${API}/speech/recognize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'audio/pcm', 'X-Sample-Rate': '16000', 'X-Device': dev.name },
+      body: audioData,
+      signal: AbortSignal.timeout(120000),
+    });
+
+    if (speechR.ok) {
+      const result = await speechR.json();
+      outputEl.textContent += `\n=== 识别结果 ===\n`;
+      outputEl.textContent += `文本: ${result.text || '(无语音)'}\n`;
+      outputEl.textContent += `语言: ${result.language}\n`;
+      outputEl.textContent += `时长: ${result.duration}s\n`;
+      outputEl.textContent += `段数: ${(result.segments || []).length}\n`;
+      if (result.segments && result.segments.length > 0) {
+        outputEl.textContent += `\n--- 分段详情 ---\n`;
+        result.segments.forEach((s, i) => {
+          outputEl.textContent += `[${s.start.toFixed(1)}s-${s.end.toFixed(1)}s] ${s.text}\n`;
+        });
+      }
+      statusEl.textContent = '✅ 测试完成';
+    } else {
+      statusEl.textContent = '识别失败';
+      outputEl.textContent += `错误: HTTP ${speechR.status_code}\n`;
+    }
+  } catch (e) {
+    statusEl.textContent = '错误: ' + e.message;
+    outputEl.textContent += `\n错误: ${e.message}\n`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ 测试识别';
+  }
+}
