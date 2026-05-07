@@ -27,6 +27,7 @@ services:
       IMAGE_STORAGE: retention
       IMAGE_RETENTION_HOURS: 48
       NAS_PATH: /app/images
+      HF_ENDPOINT: https://hf-mirror.com
     healthcheck:
       test: [CMD, curl, -f, http://localhost:8000/health]
       interval: 30s
