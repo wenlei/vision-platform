@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 li
 
 WORKDIR /app
 COPY docker/requirements.gpu.txt .
-# build: 2026-05-06 - faster-whisper support
+# build: 2026-05-07 - faster-whisper support
 RUN pip install --no-cache-dir -r requirements.gpu.txt
+RUN pip install --no-cache-dir faster-whisper==1.1.1
 
 RUN python3 -c "import clip; clip.load('ViT-B/32', device='cpu'); print('CLIP downloaded')"
 RUN python3 -c "from ultralytics import YOLO; YOLO('yolo26l.pt'); print('YOLO26L downloaded')"
