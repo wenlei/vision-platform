@@ -32,7 +32,7 @@ def _load_whisper():
     # GPU 使用 float16，CPU 使用 int8
     device = "cuda" if _check_cuda() else "cpu"
     compute_type = "float16" if device == "cuda" else "int8"
-    _whisper_model = WhisperModel("large-v3", device=device, compute_type=compute_type)
+    _whisper_model = WhisperModel("large-v3", device=device, compute_type=compute_type, download_root="/app/models/whisper")
     log.info(f"Whisper 模型加载完成: device={device}, compute_type={compute_type}")
     return _whisper_model
 
