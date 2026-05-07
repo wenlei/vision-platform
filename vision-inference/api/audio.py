@@ -242,10 +242,18 @@ async def audio_infer(request: Request):
 
 @router.get("/audio/latest")
 async def audio_latest(device: str = ""):
-    """获取指定设备的最新录音。"""
+    """获取指定设备的最新录音。支持设备名、IP、或别名查找。"""
     with _cache_lock:
         if device:
             entry = _audio_cache.get(device)
+            if not entry:
+                # 按 IP 或模糊匹配查找（兼容固件中设备名不一致的情况）
+                for key, val in _audio_cache.items():
+                    if device in key or key in device:
+                        entry = val
+                        break
+                if not entry and _audio_cache:
+                    entry = list(_audio_cache.values())[-1]
             if not entry:
                 return {"error": f"No audio for {device}"}
             return Response(
